@@ -142,54 +142,38 @@ function JobCard({
               {job.title}
             </Text>
 
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 6,
-                gap: 12,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <FontAwesome
-                  name="map-marker"
-                  size={11}
-                  color={colors.textTertiary}
-                />
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
+              <FontAwesome name="map-marker" size={11} color={colors.textTertiary} />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "DMSans_400Regular",
+                  color: colors.textSecondary,
+                  marginLeft: 4,
+                  flex: 1,
+                }}
+                numberOfLines={1}
+              >
+                {job.locality ? `${job.locality}, ` : ""}
+                {job.city || t("common.nearby")}
+              </Text>
+            </View>
+
+            {budgetLabel && (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+                <FontAwesome name="inr" size={10} color={colors.textTertiary} />
                 <Text
                   style={{
                     fontSize: 12,
-                    fontFamily: "DMSans_400Regular",
+                    fontFamily: "DMSans_500Medium",
                     color: colors.textSecondary,
-                    marginLeft: 4,
+                    marginLeft: 3,
                   }}
-                  numberOfLines={1}
                 >
-                  {job.locality ? `${job.locality}, ` : ""}
-                  {job.city || t("common.nearby")}
+                  {budgetLabel}
                 </Text>
               </View>
-
-              {budgetLabel && (
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <FontAwesome
-                    name="inr"
-                    size={10}
-                    color={colors.textTertiary}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontFamily: "DMSans_500Medium",
-                      color: colors.textSecondary,
-                      marginLeft: 3,
-                    }}
-                  >
-                    {budgetLabel}
-                  </Text>
-                </View>
-              )}
-            </View>
+            )}
           </View>
         </View>
 
@@ -206,26 +190,31 @@ function JobCard({
               : "rgba(0,0,0,0.04)",
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: urgency.bg,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 6,
-            }}
-          >
-            <Text
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontSize: 11, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>
+              {t("home.whenToStart")}:
+            </Text>
+            <View
               style={{
-                fontSize: 11,
-                fontFamily: "DMSans_600SemiBold",
-                color: urgency.color,
-                textTransform: "capitalize",
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: urgency.bg,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
               }}
             >
-              {job.urgency.replace("_", " ")}
-            </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontFamily: "DMSans_600SemiBold",
+                  color: urgency.color,
+                  textTransform: "capitalize",
+                }}
+              >
+                {job.urgency.replace("_", " ")}
+              </Text>
+            </View>
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -866,6 +855,7 @@ export default function HomeScreen() {
               colors={colors}
               isDark={isDark}
               t={t}
+              isEmployer={isEmployer}
             />
           ))
         )}

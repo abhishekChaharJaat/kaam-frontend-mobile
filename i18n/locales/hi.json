@@ -59,7 +59,9 @@
     "activeJobs": "सक्रिय",
     "responses": "जवाब",
     "totalViews": "व्यूज",
-    "searchJobs": "काम खोजें..."
+    "searchJobs": "काम खोजें...",
+    "requirement": "जरूरत",
+    "whenToStart": "कब से शुरू करें"
   },
   "jobs": {
     "title": "शीर्षक",

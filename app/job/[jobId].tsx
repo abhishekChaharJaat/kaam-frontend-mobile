@@ -19,7 +19,8 @@ import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/lib/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import { WebView } from "react-native-webview";
+import { useUserStore } from "@/store/user";
 
 interface JobDetail {
   id: string;
@@ -283,6 +284,9 @@ export default function JobDetailScreen() {
   const isDark = colors.bgBase === "#0A0F1A";
   const insets = useSafeAreaInsets();
 
+  const usagePreference = useUserStore((s) => s.usagePreference);
+  const isWorker = usagePreference === "find_work";
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -389,7 +393,7 @@ export default function JobDetailScreen() {
           }}
           numberOfLines={1}
         >
-          {loading ? t("jobs.jobDetail") : (job?.title ?? t("jobs.jobDetail"))}
+          {t("jobs.jobDetail")}
         </Text>
         {!loading && job && (
           <View
@@ -448,75 +452,90 @@ export default function JobDetailScreen() {
 
             <View style={{ paddingHorizontal: 20, marginTop: job.images.length > 0 ? 20 : 16 }}>
 
-              {/* ── Title ── */}
-              <Text
-                style={{
-                  fontSize: 24,
-                  fontFamily: "DMSans_700Bold",
-                  color: colors.textPrimary,
-                  lineHeight: 32,
-                }}
-              >
-                {job.title}
-              </Text>
+              {isWorker ? (
+                /* ══ WORKER VIEW ══ */
+                <>
+                  {/* Requirement label + title */}
+                  <Text style={{ fontSize: 11, fontFamily: "DMSans_600SemiBold", letterSpacing: 1, textTransform: "uppercase", color: "#059669", marginBottom: 6 }}>
+                    {t("home.requirement")}
+                  </Text>
+                  <Text style={{ fontSize: 26, fontFamily: "DMSans_700Bold", color: colors.textPrimary, lineHeight: 34 }}>
+                    {job.title}
+                  </Text>
 
-              {/* ── Meta chips ── */}
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                {location ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <FontAwesome name="map-marker" size={12} color={colors.textTertiary} />
-                    <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{location}</Text>
+                  {/* Description */}
+                  {job.description ? (
+                    <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textSecondary, lineHeight: 24, marginTop: 10 }}>
+                      {job.description}
+                    </Text>
+                  ) : null}
+
+                  {/* When to start — pill */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 }}>
+                    <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{t("home.whenToStart")}:</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+                      <FontAwesome name="calendar-o" size={12} color="#3B82F6" />
+                      <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#3B82F6" }}>
+                        {job.required_date ?? urgency.label}
+                      </Text>
+                    </View>
                   </View>
-                ) : null}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: urgency.bg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                  <FontAwesome name={urgency.icon} size={12} color={urgency.color} />
-                  <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: urgency.color }}>{urgency.label}</Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                  <FontAwesome name="clock-o" size={12} color={colors.textTertiary} />
-                  <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary }}>{formatTimeAgo(job.created_at)}</Text>
-                </View>
-              </View>
 
-              {/* ── Divider ── */}
-              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  {/* Budget — pill */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 }}>
+                    <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{t("jobs.budget")}:</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(5,150,105,0.15)" : "rgba(5,150,105,0.08)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+                      <FontAwesome name="money" size={12} color="#059669" />
+                      <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#059669" }}>{formatBudget()}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                /* ══ EMPLOYER / DEFAULT VIEW ══ */
+                <>
+                  {/* Title */}
+                  <Text style={{ fontSize: 24, fontFamily: "DMSans_700Bold", color: colors.textPrimary, lineHeight: 32 }}>
+                    {job.title}
+                  </Text>
 
-              {/* ── Description ── */}
-              <SectionHeader title={t("jobs.description")} />
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontFamily: "DMSans_400Regular",
-                  color: colors.textPrimary,
-                  lineHeight: 25,
-                }}
-              >
-                {job.description}
-              </Text>
+                  {/* Meta chips */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                    {location ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                        <FontAwesome name="map-marker" size={12} color={colors.textTertiary} />
+                        <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{location}</Text>
+                      </View>
+                    ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: urgency.bg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                      <FontAwesome name={urgency.icon} size={12} color={urgency.color} />
+                      <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: urgency.color }}>{urgency.label}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                      <FontAwesome name="clock-o" size={12} color={colors.textTertiary} />
+                      <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary }}>{formatTimeAgo(job.created_at)}</Text>
+                    </View>
+                  </View>
 
-              {/* ── Divider ── */}
-              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  {/* Divider + Description */}
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.description")} />
+                  <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 25 }}>
+                    {job.description}
+                  </Text>
 
-              {/* ── Budget ── */}
-              <SectionHeader title={t("jobs.budget")} />
-              <View
-                style={{
-                  backgroundColor: isDark ? "rgba(5,150,105,0.1)" : "rgba(5,150,105,0.06)",
-                  borderRadius: 16,
-                  padding: 16,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: isDark ? "rgba(5,150,105,0.2)" : "rgba(5,150,105,0.12)",
-                }}
-              >
-                <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: "#059669", alignItems: "center", justifyContent: "center", marginRight: 14 }}>
-                  <FontAwesome name="money" size={20} color="#FFF" />
-                </View>
-                <Text style={{ fontSize: 22, fontFamily: "DMSans_700Bold", color: "#059669" }}>
-                  {formatBudget()}
-                </Text>
-              </View>
+                  {/* Divider + Budget */}
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.budget")} />
+                  <View style={{ backgroundColor: isDark ? "rgba(5,150,105,0.1)" : "rgba(5,150,105,0.06)", borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isDark ? "rgba(5,150,105,0.2)" : "rgba(5,150,105,0.12)" }}>
+                    <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: "#059669", alignItems: "center", justifyContent: "center", marginRight: 14 }}>
+                      <FontAwesome name="money" size={20} color="#FFF" />
+                    </View>
+                    <Text style={{ fontSize: 22, fontFamily: "DMSans_700Bold", color: "#059669" }}>
+                      {formatBudget()}
+                    </Text>
+                  </View>
+                </>
+              )}
 
               {/* ── Schedule ── */}
               {(job.required_date || job.required_time_slot) && (
@@ -557,6 +576,103 @@ export default function JobDetailScreen() {
                   </View>
                 </>
               ) : null}
+
+              {/* ── Location Map (OpenStreetMap + Nominatim geocoding) ── */}
+              {(job.city || job.locality) ? (() => {
+                const locationLabel = [job.address_line, job.locality, job.city].filter(Boolean).join(", ");
+                const searchQuery = [job.locality, job.city].filter(Boolean).join(", ");
+
+                const mapHtml = job.latitude && job.longitude
+                  ? `
+<!DOCTYPE html><html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>* {margin:0;padding:0;box-sizing:border-box;} html,body,#map{width:100%;height:100vh;}</style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,attributionControl:false})
+      .setView([${job.latitude},${job.longitude}],15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var icon = L.divIcon({className:'',html:'<div style="width:32px;height:32px;background:#059669;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)"></div>',iconSize:[32,32],iconAnchor:[16,32]});
+    L.marker([${job.latitude},${job.longitude}],{icon}).addTo(map);
+  </script>
+</body></html>`
+                  : `
+<!DOCTYPE html><html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>* {margin:0;padding:0;box-sizing:border-box;} html,body,#map{width:100%;height:100vh;}</style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,attributionControl:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var icon = L.divIcon({className:'',html:'<div style="width:32px;height:32px;background:#059669;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)"></div>',iconSize:[32,32],iconAnchor:[16,32]});
+    fetch('https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1')
+      .then(r=>r.json())
+      .then(data=>{
+        if(data && data[0]){
+          var lat=parseFloat(data[0].lat), lng=parseFloat(data[0].lon);
+          map.setView([lat,lng],13);
+          L.marker([lat,lng],{icon}).addTo(map);
+        } else {
+          map.setView([20.5937,78.9629],5);
+        }
+      })
+      .catch(()=>{ map.setView([20.5937,78.9629],5); });
+  </script>
+</body></html>`;
+
+                return (
+                  <>
+                    <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                    <SectionHeader title={t("jobs.location")} />
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        const q = encodeURIComponent(locationLabel);
+                        const url = Platform.OS === "ios"
+                          ? `https://maps.apple.com/?q=${q}`
+                          : `https://maps.google.com/?q=${q}`;
+                        Linking.openURL(url);
+                      }}
+                      style={{ borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
+                    >
+                      <WebView
+                        style={{ width: "100%", height: 200 }}
+                        scrollEnabled={false}
+                        pointerEvents="none"
+                        originWhitelist={["*"]}
+                        source={{ html: mapHtml }}
+                      />
+                      <View style={{
+                        position: "absolute", bottom: 0, left: 0, right: 0,
+                        backgroundColor: isDark ? "rgba(17,24,39,0.88)" : "rgba(255,255,255,0.92)",
+                        paddingHorizontal: 14, paddingVertical: 10,
+                        flexDirection: "row", alignItems: "center", gap: 8,
+                      }}>
+                        <FontAwesome name="map-marker" size={14} color="#059669" />
+                        <Text style={{ flex: 1, fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textPrimary }} numberOfLines={1}>
+                          {locationLabel}
+                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(5,150,105,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                          <FontAwesome name="external-link" size={10} color="#059669" />
+                          <Text style={{ fontSize: 11, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
+                            {t("jobs.openInMaps")}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                );
+              })() : null}
 
               {/* ── Activity ── */}
               <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
@@ -620,81 +736,6 @@ export default function JobDetailScreen() {
                   </TouchableOpacity>
                 </>
               )}
-
-              {/* ── Location Map ── */}
-              {(job.latitude && job.longitude) || job.city ? (
-                <>
-                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
-                  <SectionHeader title={t("jobs.location")} />
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => {
-                      const lat = job.latitude ?? 0;
-                      const lng = job.longitude ?? 0;
-                      const label = encodeURIComponent([job.address_line, job.locality, job.city].filter(Boolean).join(", "));
-                      const url = Platform.OS === "ios"
-                        ? `maps:0,0?q=${label}@${lat},${lng}`
-                        : `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
-                      Linking.openURL(url);
-                    }}
-                    style={{ borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
-                  >
-                    {job.latitude && job.longitude ? (
-                      <MapView
-                        provider={PROVIDER_GOOGLE}
-                        style={{ width: "100%", height: 200 }}
-                        initialRegion={{
-                          latitude: job.latitude,
-                          longitude: job.longitude,
-                          latitudeDelta: 0.01,
-                          longitudeDelta: 0.01,
-                        }}
-                        scrollEnabled={false}
-                        zoomEnabled={false}
-                        pitchEnabled={false}
-                        rotateEnabled={false}
-                        pointerEvents="none"
-                      >
-                        <Marker
-                          coordinate={{ latitude: job.latitude, longitude: job.longitude }}
-                          title={job.title}
-                          description={[job.locality, job.city].filter(Boolean).join(", ")}
-                        />
-                      </MapView>
-                    ) : (
-                      /* No coords — show a placeholder with the area name */
-                      <View style={{ height: 200, backgroundColor: isDark ? "#1F2937" : "#E5E7EB", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        <FontAwesome name="map-marker" size={36} color="#059669" />
-                        <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: isDark ? "#9CA3AF" : "#6B7280" }}>
-                          {[job.locality, job.city].filter(Boolean).join(", ")}
-                        </Text>
-                      </View>
-                    )}
-                    {/* Overlay label at bottom */}
-                    <View style={{
-                      position: "absolute",
-                      bottom: 0, left: 0, right: 0,
-                      backgroundColor: isDark ? "rgba(17,24,39,0.85)" : "rgba(255,255,255,0.88)",
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}>
-                      <FontAwesome name="map-marker" size={14} color="#059669" />
-                      <Text style={{ flex: 1, fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textPrimary }} numberOfLines={1}>
-                        {[job.address_line, job.locality, job.city].filter(Boolean).join(", ") || t("jobs.location")}
-                      </Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(5,150,105,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                        <FontAwesome name="external-link" size={10} color="#059669" />
-                        <Text style={{ fontSize: 11, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
-                          {t("jobs.openInMaps")}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              ) : null}
 
             </View>
           </Animated.View>

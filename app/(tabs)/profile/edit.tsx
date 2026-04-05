@@ -27,6 +27,8 @@ interface UserProfile {
   city?: string;
   locality?: string;
   usage_preference?: string;
+  work_title?: string;
+  bio?: string;
 }
 
 function FormField({
@@ -94,6 +96,8 @@ export default function EditProfileScreen() {
         setPhone(me.phone || "");
         setCity(me.city || location?.city || "");
         setLocality(me.locality || location?.locality || "");
+        setHeadline(me.work_title || "");
+        setBio(me.bio || "");
       } catch {}
       setLoading(false);
     })();
@@ -112,6 +116,10 @@ export default function EditProfileScreen() {
           phone: phone.trim() || null,
           city: city.trim() || null,
           locality: locality.trim() || null,
+          ...(usagePreference === "find_work" && {
+            work_title: headline.trim() || null,
+            bio: bio.trim() || null,
+          }),
         },
       });
       showToast(t("profile.saved"), "success");

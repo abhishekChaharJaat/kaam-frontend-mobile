@@ -1,7 +1,11 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, TextInput } from "react-native";
+import { useAuth } from "@clerk/clerk-expo";
 import { useUserStore } from "@/store/user";
+import { api } from "@/lib/api";
+import { useThemeColors } from "@/lib/useThemeColors";
+import { useTranslation } from "react-i18next";
 
 const CATEGORIES = [
   "Plumber",
@@ -28,75 +32,172 @@ const CATEGORIES = [
 
 export default function CategorySelectionScreen() {
   const router = useRouter();
-  const { setOnboardingComplete } = useUserStore();
+  const { getToken } = useAuth();
+  const { setOnboardingComplete, setOnboardingStep } = useUserStore();
+  const colors = useThemeColors();
+  const { t } = useTranslation();
+  const isDark = colors.bgBase === "#0A0F1A";
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [otherSelected, setOtherSelected] = useState(false);
+  const [otherText, setOtherText] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const toggleCategory = (cat: string) => {
     const next = new Set(selected);
-    if (next.has(cat)) {
-      next.delete(cat);
-    } else {
-      next.add(cat);
-    }
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
     setSelected(next);
   };
 
-  const onContinue = () => {
-    setOnboardingComplete(true);
-    router.replace("/(tabs)");
+  const totalSelected = selected.size + (otherSelected && otherText.trim() ? 1 : 0);
+
+  const onContinue = async () => {
+    if (totalSelected === 0) return;
+    setSaving(true);
+    try {
+      const token = await getToken();
+      const parts = Array.from(selected);
+      if (otherSelected && otherText.trim()) parts.push(otherText.trim());
+      const workTitle = parts.join(" | ");
+      await api("/users/me", {
+        method: "PATCH",
+        token,
+        body: { work_title: workTitle },
+      });
+      setOnboardingComplete(true);
+      setOnboardingStep(null);
+      router.replace("/(tabs)");
+    } catch {
+      setSaving(false);
+    }
   };
 
   return (
-    <View className="flex-1 bg-bg-base">
-      <View className="pt-16 px-6 pb-4">
-        <Text className="text-h1 font-sans-bold text-text-primary text-center mb-2">
-          What services do you offer?
+    <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
+      <View style={{ paddingTop: 60, paddingHorizontal: 24, paddingBottom: 16 }}>
+        <Text style={{ fontSize: 26, fontFamily: "DMSans_700Bold", color: colors.textPrimary, textAlign: "center", marginBottom: 8 }}>
+          {t("onboarding.selectCategories")}
         </Text>
-        <Text className="text-body text-text-secondary text-center">
-          Select one or more categories
+        <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textSecondary, textAlign: "center" }}>
+          Select one or more
         </Text>
       </View>
 
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        <View className="flex-row flex-wrap gap-2 pb-6">
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              className={`border rounded-full px-4 py-2 ${
-                selected.has(cat)
-                  ? "border-primary bg-primary-ghost"
-                  : "border-border bg-bg-surface"
-              }`}
-              onPress={() => toggleCategory(cat)}
-            >
-              <Text
-                className={`text-body-sm font-sans-medium ${
-                  selected.has(cat) ? "text-primary" : "text-text-secondary"
-                }`}
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 20 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {CATEGORIES.map((cat) => {
+            const isSelected = selected.has(cat);
+            return (
+              <TouchableOpacity
+                key={cat}
+                onPress={() => toggleCategory(cat)}
+                activeOpacity={0.7}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? "#059669" : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+                  borderRadius: 24,
+                  paddingHorizontal: 16,
+                  paddingVertical: 9,
+                  backgroundColor: isSelected
+                    ? isDark ? "rgba(5,150,105,0.15)" : "rgba(5,150,105,0.08)"
+                    : colors.bgSurface,
+                }}
               >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={{
+                  fontSize: 14,
+                  fontFamily: isSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                  color: isSelected ? "#059669" : colors.textSecondary,
+                }}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Other option */}
+          <TouchableOpacity
+            onPress={() => setOtherSelected(!otherSelected)}
+            activeOpacity={0.7}
+            style={{
+              borderWidth: 1.5,
+              borderColor: otherSelected ? "#059669" : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+              borderRadius: 24,
+              paddingHorizontal: 16,
+              paddingVertical: 9,
+              backgroundColor: otherSelected
+                ? isDark ? "rgba(5,150,105,0.15)" : "rgba(5,150,105,0.08)"
+                : colors.bgSurface,
+            }}
+          >
+            <Text style={{
+              fontSize: 14,
+              fontFamily: otherSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+              color: otherSelected ? "#059669" : colors.textSecondary,
+            }}>
+              Other
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Other text input */}
+        {otherSelected && (
+          <View style={{ marginTop: 16 }}>
+            <TextInput
+              value={otherText}
+              onChangeText={setOtherText}
+              placeholder="e.g. Driving, Security Guard..."
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+              style={{
+                backgroundColor: colors.bgSurface,
+                borderWidth: 1.5,
+                borderColor: otherText.trim() ? "#059669" : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+                borderRadius: 14,
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                fontSize: 15,
+                fontFamily: "DMSans_400Regular",
+                color: colors.textPrimary,
+              }}
+            />
+          </View>
+        )}
       </ScrollView>
 
-      <View className="px-6 pb-8 pt-4">
+      <View style={{ paddingHorizontal: 20, paddingBottom: 40, paddingTop: 16 }}>
         <TouchableOpacity
-          className={`rounded-lg py-4 items-center ${
-            selected.size > 0 ? "bg-primary" : "bg-bg-elevated"
-          }`}
           onPress={onContinue}
-          disabled={selected.size === 0}
+          disabled={totalSelected === 0 || saving}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: totalSelected > 0 ? "#059669" : isDark ? "#1F2937" : "#E5E7EB",
+            borderRadius: 16,
+            paddingVertical: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "row",
+            gap: 8,
+            shadowColor: "#059669",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: totalSelected > 0 ? 0.3 : 0,
+            shadowRadius: 12,
+            elevation: totalSelected > 0 ? 6 : 0,
+          }}
         >
-          <Text
-            className={`text-body-lg font-sans-semibold ${
-              selected.size > 0
-                ? "text-text-on-primary"
-                : "text-text-disabled"
-            }`}
-          >
-            Continue ({selected.size} selected)
+          {saving ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : null}
+          <Text style={{
+            fontSize: 16,
+            fontFamily: "DMSans_600SemiBold",
+            color: totalSelected > 0 ? "#FFF" : colors.textTertiary,
+          }}>
+            {t("onboarding.finishSetup")} {totalSelected > 0 ? `(${totalSelected})` : ""}
           </Text>
         </TouchableOpacity>
       </View>

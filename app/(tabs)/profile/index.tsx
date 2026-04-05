@@ -1,12 +1,13 @@
 import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useUserStore } from "@/store/user";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
+import { api } from "@/lib/api";
 
 function MenuItem({
   icon,
@@ -112,12 +113,26 @@ function Divider() {
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
-  const { signOut } = useAuth();
+  const { signOut, getToken } = useAuth();
   const { user } = useUser();
   const { usagePreference, location } = useUserStore();
   const router = useRouter();
   const colors = useThemeColors();
   const isDark = colors.bgBase === "#0A0F1A";
+  const [workTitle, setWorkTitle] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (usagePreference !== "find_work") return;
+      (async () => {
+        try {
+          const token = await getToken();
+          const me = await api<{ work_title?: string }>("/auth/me", { token });
+          setWorkTitle(me.work_title || null);
+        } catch {}
+      })();
+    }, [usagePreference, getToken])
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -188,16 +203,29 @@ export default function ProfileScreen() {
             {user?.fullName || t("chat.user")}
           </Text>
 
-          <Text
-            style={{
-              fontSize: 14,
-              fontFamily: "DMSans_400Regular",
-              color: "rgba(255,255,255,0.75)",
-              marginTop: 4,
-            }}
-          >
-            {user?.primaryEmailAddress?.emailAddress || ""}
-          </Text>
+          {workTitle ? (
+            <Text
+              style={{
+                fontSize: 14,
+                fontFamily: "DMSans_600SemiBold",
+                color: "rgba(255,255,255,0.9)",
+                marginTop: 4,
+              }}
+            >
+              {workTitle}
+            </Text>
+          ) : (
+            <Text
+              style={{
+                fontSize: 14,
+                fontFamily: "DMSans_400Regular",
+                color: "rgba(255,255,255,0.75)",
+                marginTop: 4,
+              }}
+            >
+              {user?.primaryEmailAddress?.emailAddress || ""}
+            </Text>
+          )}
 
           <View
             style={{

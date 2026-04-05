@@ -59,7 +59,9 @@
     "activeJobs": "Active",
     "responses": "Replies",
     "totalViews": "Views",
-    "searchJobs": "Search for jobs..."
+    "searchJobs": "Search for jobs...",
+    "requirement": "Requirement",
+    "whenToStart": "when to start"
   },
   "jobs": {
     "title": "Title",

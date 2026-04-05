@@ -154,7 +154,9 @@ export default function PostJob() {
     }
   };
 
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const selectedCategory = categoryId === "other"
+    ? { id: "other", name: "Other", slug: "other" }
+    : categories.find((c) => c.id === categoryId);
   const selectedUrgency = URGENCY_OPTIONS.find((u) => u.key === urgency);
 
   const formatBudget = () => {
@@ -371,6 +373,24 @@ function StepOne({
               </Text>
             </TouchableOpacity>
           ))}
+          {/* Other chip */}
+          <TouchableOpacity
+            className={`mr-2.5 mb-3 px-4 py-2.5 rounded-xl border ${
+              categoryId === "other"
+                ? "bg-primary border-primary"
+                : "bg-bg-surface border-border"
+            }`}
+            onPress={() => setCategoryId("other")}
+            activeOpacity={0.7}
+          >
+            <Text
+              className={`text-body-sm font-sans-medium ${
+                categoryId === "other" ? "text-text-on-primary" : "text-text-secondary"
+              }`}
+            >
+              Other
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>

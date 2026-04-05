@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type UsagePreference = "find_worker" | "find_work";
-export type OnboardingStep = "basic-info" | "location-permission" | "usage-preference" | null;
+export type OnboardingStep = "basic-info" | "location-permission" | "usage-preference" | "category-selection" | null;
 
 interface LocationData {
   latitude: number;

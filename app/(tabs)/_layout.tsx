@@ -233,6 +233,7 @@ interface BackendUser {
   city?: string;
   locality?: string;
   state?: string;
+  work_title?: string;
 }
 
 export default function TabLayout() {
@@ -264,8 +265,10 @@ export default function TabLayout() {
         const hasName = !!me.full_name && me.full_name !== "User";
         const hasLocation = !!me.city;
         const hasPreference = !!me.usage_preference;
+        const isWorkerAccount = me.usage_preference === "find_work";
+        const hasWorkTitle = !isWorkerAccount || !!me.work_title;
 
-        if (hasName && hasLocation && hasPreference) {
+        if (hasName && hasLocation && hasPreference && hasWorkTitle) {
           setUsagePreference(me.usage_preference as "find_worker" | "find_work");
           setLocation({
             latitude: 0,
@@ -282,6 +285,10 @@ export default function TabLayout() {
             setOnboardingStep("basic-info");
           } else if (!hasLocation) {
             setOnboardingStep("location-permission");
+          } else if (!hasPreference) {
+            setOnboardingStep("usage-preference");
+          } else if (isWorkerAccount && !me.work_title) {
+            setOnboardingStep("category-selection");
           } else {
             setOnboardingStep("usage-preference");
           }
