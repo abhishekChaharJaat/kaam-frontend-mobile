@@ -7,6 +7,7 @@ import {
   View,
   Text,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Redirect, Tabs, useRouter } from "expo-router";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -66,9 +67,16 @@ function isNestedScreenActive(state: BottomTabBarProps["state"]): boolean {
   return false;
 }
 
+function getAndroidBottom(bottomInset: number): number {
+  if (bottomInset === 0) return 16;          // physical / capacitive buttons
+  if (bottomInset < 30) return bottomInset + 8; // gesture navigation
+  return bottomInset;                        // 3-button software nav bar
+}
+
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colors = useThemeColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   if (isNestedScreenActive(state)) return null;
 
@@ -86,7 +94,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <View
       style={{
         position: "absolute",
-        bottom: Platform.OS === "ios" ? 24 : 16,
+        bottom: Platform.OS === "ios" ? 24 : getAndroidBottom(insets.bottom),
         left: 16,
         right: 16,
       }}
@@ -233,14 +241,17 @@ export default function TabLayout() {
   const {
     usagePreference,
     isOnboardingComplete,
+    onboardingStep,
     setOnboardingComplete,
+    setOnboardingStep,
     setUsagePreference,
     setLocation,
   } = useUserStore();
-  const [verifying, setVerifying] = useState(!isOnboardingComplete);
+  // Always verify against the backend on sign-in
+  const [verifying, setVerifying] = useState(true);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || isOnboardingComplete) {
+    if (!isLoaded || !isSignedIn) {
       setVerifying(false);
       return;
     }
@@ -249,34 +260,45 @@ export default function TabLayout() {
       try {
         const token = await getToken();
         const me = await api<BackendUser>("/auth/me", { token });
-        if (
-          me.full_name &&
-          me.full_name !== "User" &&
-          me.usage_preference
-        ) {
-          setUsagePreference(
-            me.usage_preference as "find_worker" | "find_work"
-          );
-          if (me.city) {
-            setLocation({
-              latitude: 0,
-              longitude: 0,
-              city: me.city,
-              locality: me.locality,
-              state: me.state,
-            });
-          }
+
+        const hasName = !!me.full_name && me.full_name !== "User";
+        const hasLocation = !!me.city;
+        const hasPreference = !!me.usage_preference;
+
+        if (hasName && hasLocation && hasPreference) {
+          setUsagePreference(me.usage_preference as "find_worker" | "find_work");
+          setLocation({
+            latitude: 0,
+            longitude: 0,
+            city: me.city,
+            locality: me.locality,
+            state: me.state,
+          });
           setOnboardingComplete(true);
+          setOnboardingStep(null);
+        } else {
+          setOnboardingComplete(false);
+          if (!hasName) {
+            setOnboardingStep("basic-info");
+          } else if (!hasLocation) {
+            setOnboardingStep("location-permission");
+          } else {
+            setOnboardingStep("usage-preference");
+          }
         }
-      } catch {}
+      } catch {
+        // On network error keep existing local state
+      }
       setVerifying(false);
     })();
-  }, [isLoaded, isSignedIn, isOnboardingComplete, getToken, setUsagePreference, setLocation, setOnboardingComplete]);
+  }, [isLoaded, isSignedIn, getToken, setUsagePreference, setLocation, setOnboardingComplete, setOnboardingStep]);
 
   if (!isLoaded || verifying) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/login" />;
-  if (!isOnboardingComplete)
-    return <Redirect href="/(onboarding)/basic-info" />;
+  if (!isOnboardingComplete) {
+    const step = onboardingStep ?? "basic-info";
+    return <Redirect href={`/(onboarding)/${step}`} />;
+  }
 
   const isWorkerMode = usagePreference === "find_worker";
 

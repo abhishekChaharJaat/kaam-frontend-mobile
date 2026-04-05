@@ -114,7 +114,10 @@
     "requiredDate": "ज़रूरी तारीख",
     "timeSlot": "समय",
     "unknownLocation": "अज्ञात स्थान",
-    "titlePlaceholder": "जैसे: बाथरूम नल की मरम्मत"
+    "titlePlaceholder": "जैसे: बाथरूम नल की मरम्मत",
+    "schedule": "शेड्यूल",
+    "address": "पता",
+    "postedBy": "पोस्ट किया"
   },
   "chat": {
     "chats": "चैट",

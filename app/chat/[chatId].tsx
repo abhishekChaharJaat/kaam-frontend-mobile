@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -19,6 +20,7 @@ import { ChatWebSocket } from "@/lib/websocket";
 import { useTranslation } from "react-i18next";
 import { useUserStore } from "@/store/user";
 import { useToast } from "@/lib/toast";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Message {
   id: string;
@@ -48,6 +50,59 @@ interface MeResponse {
   clerk_user_id: string;
 }
 
+function SkeletonBlock({ width, height = 12, style }: { width: number | string; height?: number; style?: object }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+
+  return (
+    <Animated.View
+      style={[{ width, height, borderRadius: 6, backgroundColor: "#94A3B8", opacity }, style]}
+    />
+  );
+}
+
+const SKELETON_ROWS: Array<{ mine: boolean; width: number }> = [
+  { mine: false, width: 180 },
+  { mine: true,  width: 120 },
+  { mine: false, width: 220 },
+  { mine: true,  width: 160 },
+  { mine: false, width: 140 },
+  { mine: true,  width: 200 },
+  { mine: false, width: 100 },
+];
+
+function ChatSkeleton() {
+  return (
+    <View style={{ flex: 1, paddingVertical: 12 }}>
+      {SKELETON_ROWS.map((row, i) => (
+        <View
+          key={i}
+          style={{
+            flexDirection: "row",
+            justifyContent: row.mine ? "flex-end" : "flex-start",
+            paddingHorizontal: 16,
+            marginBottom: 14,
+          }}
+        >
+          <View style={{ maxWidth: "75%" }}>
+            <SkeletonBlock width={row.width} height={36} style={{ borderRadius: 16 }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function ChatRoom() {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -59,6 +114,7 @@ export default function ChatRoom() {
   const { getToken } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { usagePreference } = useUserStore();
   const { showToast } = useToast();
@@ -328,14 +384,6 @@ export default function ChatRoom() {
     );
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-bg-base items-center justify-center">
-        <ActivityIndicator size="large" color="#059669" />
-      </View>
-    );
-  }
-
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-bg-base"
@@ -358,13 +406,22 @@ export default function ChatRoom() {
             router.push(`/user/${otherUserId}`);
           }}
         >
-          <Text className="text-body font-sans-semibold text-text-primary">
-            {getOtherName()}
-          </Text>
-          {conv?.job_title && (
-            <Text className="text-caption text-text-secondary" numberOfLines={1}>
-              {conv.job_title}
-            </Text>
+          {loading ? (
+            <View style={{ gap: 6 }}>
+              <SkeletonBlock width={130} height={14} />
+              <SkeletonBlock width={90} height={10} />
+            </View>
+          ) : (
+            <>
+              <Text className="text-body font-sans-semibold text-text-primary">
+                {getOtherName()}
+              </Text>
+              {conv?.job_title && (
+                <Text className="text-caption text-text-secondary" numberOfLines={1}>
+                  {conv.job_title}
+                </Text>
+              )}
+            </>
           )}
         </TouchableOpacity>
         {isEmployer && conv && (
@@ -447,17 +504,21 @@ export default function ChatRoom() {
         </View>
       )}
 
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        className="flex-1"
-        contentContainerStyle={{ paddingVertical: 8 }}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: false })
-        }
-      />
+      {loading ? (
+        <ChatSkeleton />
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          className="flex-1"
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: conv?.is_disabled ? 8 + insets.bottom : 8 }}
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
+        />
+      )}
 
       {!conv?.is_disabled && !conv?.is_assigned && conv && (
         <View
@@ -466,7 +527,8 @@ export default function ChatRoom() {
             alignItems: "center",
             justifyContent: "center",
             paddingHorizontal: 16,
-            paddingVertical: 8,
+            paddingTop: 8,
+            paddingBottom: 8,
             borderTopWidth: 1,
             borderTopColor: colors.border,
             backgroundColor: colors.bgSurface,
@@ -528,7 +590,8 @@ export default function ChatRoom() {
       )}
 
       {!conv?.is_disabled && (
-        <View className="flex-row items-end px-4 py-3 border-t border-border bg-bg-base">
+        <View className="flex-row items-end px-4 border-t border-border bg-bg-base"
+          style={{ paddingTop: 12, paddingBottom: 12 + insets.bottom }}>
           <TextInput
             className="flex-1 bg-bg-surface border border-border rounded-full px-4 py-2.5 text-body text-text-primary mr-2"
             value={inputText}

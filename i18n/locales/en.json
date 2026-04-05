@@ -114,7 +114,10 @@
     "requiredDate": "Required Date",
     "timeSlot": "Time Slot",
     "unknownLocation": "Unknown location",
-    "titlePlaceholder": "e.g. Bathroom tap leak repair"
+    "titlePlaceholder": "e.g. Bathroom tap leak repair",
+    "schedule": "Schedule",
+    "address": "Address",
+    "postedBy": "Posted By"
   },
   "chat": {
     "chats": "Chats",

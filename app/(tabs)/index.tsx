@@ -10,7 +10,9 @@ import {
   Platform,
   TextInput,
 } from "react-native";
+
 import { useRouter, useFocusEffect } from "expo-router";
+import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
@@ -310,6 +312,83 @@ function StatPill({
   );
 }
 
+function SkeletonBlock({ width, height = 12, radius = 6, style }: {
+  width: number | string; height?: number; radius?: number; style?: object;
+}) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] });
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: "#94A3B8", opacity }, style]} />
+  );
+}
+
+function HomeSkeletonJobCard({ isDark }: { isDark: boolean }) {
+  return (
+    <View style={{
+      backgroundColor: isDark ? "#111827" : "#FFFFFF",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+        <SkeletonBlock width={42} height={42} radius={12} style={{ marginRight: 12 }} />
+        <View style={{ flex: 1, gap: 8 }}>
+          <SkeletonBlock width="75%" height={14} />
+          <SkeletonBlock width="50%" height={11} />
+        </View>
+      </View>
+      <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", marginTop: 12, marginBottom: 10 }} />
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <SkeletonBlock width={70} height={22} radius={6} />
+        <SkeletonBlock width={50} height={22} radius={6} />
+      </View>
+    </View>
+  );
+}
+
+function HomeSkeleton({ isDark }: { isDark: boolean }) {
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      {/* Hero header skeleton */}
+      <View style={{
+        backgroundColor: "#059669",
+        paddingTop: Platform.OS === "ios" ? 56 : 44,
+        paddingBottom: 32,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+      }}>
+        <SkeletonBlock width={100} height={12} style={{ backgroundColor: "rgba(255,255,255,0.3)" }} />
+        <SkeletonBlock width={180} height={22} radius={8} style={{ marginTop: 8, backgroundColor: "rgba(255,255,255,0.3)" }} />
+        <SkeletonBlock width={130} height={28} radius={20} style={{ marginTop: 16, backgroundColor: "rgba(255,255,255,0.2)" }} />
+      </View>
+
+      {/* Section header */}
+      <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <SkeletonBlock width={120} height={16} />
+        <SkeletonBlock width={60} height={28} radius={8} />
+      </View>
+
+      {/* Job card skeletons */}
+      <View style={{ paddingHorizontal: 20 }}>
+        <HomeSkeletonJobCard isDark={isDark} />
+        <HomeSkeletonJobCard isDark={isDark} />
+        <HomeSkeletonJobCard isDark={isDark} />
+      </View>
+    </ScrollView>
+  );
+}
+
 export default function HomeScreen() {
   const { t } = useTranslation();
   const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
@@ -326,6 +405,18 @@ export default function HomeScreen() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const heroFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return;
+      setStatusBarBackgroundColor("#059669", false);
+      setStatusBarStyle("light");
+      return () => {
+        setStatusBarBackgroundColor(isDark ? "#0A0F1A" : "#F8FAFC", false);
+        setStatusBarStyle(isDark ? "light" : "dark");
+      };
+    }, [isDark])
+  );
 
   useEffect(() => {
     Animated.timing(heroFade, {
@@ -403,18 +494,7 @@ export default function HomeScreen() {
   );
 
   if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.bgBase,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#059669" />
-      </View>
-    );
+    return <HomeSkeleton isDark={isDark} />;
   }
 
   return (

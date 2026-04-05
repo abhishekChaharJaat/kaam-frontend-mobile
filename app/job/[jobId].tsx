@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/lib/toast";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface JobDetail {
   id: string;
@@ -178,6 +179,92 @@ function formatTimeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+function SkeletonBox({ width, height = 12, radius = 6, style }: {
+  width: number | string; height?: number; radius?: number; style?: object;
+}) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] });
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: "#94A3B8", opacity }, style]} />
+  );
+}
+
+function JobDetailSkeleton({ colors, isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <View style={{ paddingHorizontal: 20, marginTop: 16, gap: 10 }}>
+        {/* title */}
+        <SkeletonBox width="80%" height={26} radius={8} />
+        <SkeletonBox width="55%" height={16} radius={6} />
+        {/* chips */}
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+          <SkeletonBox width={90} height={26} radius={8} />
+          <SkeletonBox width={70} height={26} radius={8} />
+          <SkeletonBox width={80} height={26} radius={8} />
+        </View>
+        {/* description block */}
+        <View style={{ marginTop: 20, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 16, padding: 16, gap: 10 }}>
+          <SkeletonBox width={100} height={12} radius={4} />
+          <SkeletonBox width="100%" height={12} radius={4} />
+          <SkeletonBox width="90%" height={12} radius={4} />
+          <SkeletonBox width="75%" height={12} radius={4} />
+          <SkeletonBox width="85%" height={12} radius={4} />
+        </View>
+        {/* budget card */}
+        <View style={{ marginTop: 8, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <SkeletonBox width={44} height={44} radius={14} />
+          <View style={{ gap: 8 }}>
+            <SkeletonBox width={60} height={10} radius={4} />
+            <SkeletonBox width={120} height={20} radius={6} />
+          </View>
+        </View>
+        {/* schedule */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+          <View style={{ flex: 1, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 14, padding: 14, gap: 6 }}>
+            <SkeletonBox width={50} height={10} radius={4} />
+            <SkeletonBox width={80} height={14} radius={4} />
+          </View>
+          <View style={{ flex: 1, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 14, padding: 14, gap: 6 }}>
+            <SkeletonBox width={50} height={10} radius={4} />
+            <SkeletonBox width={80} height={14} radius={4} />
+          </View>
+        </View>
+        {/* poster */}
+        <View style={{ marginTop: 8, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <SkeletonBox width={50} height={50} radius={16} />
+          <View style={{ gap: 8 }}>
+            <SkeletonBox width={110} height={14} radius={4} />
+            <SkeletonBox width={70} height={10} radius={4} />
+          </View>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <Text style={{
+      fontSize: 11,
+      fontFamily: "DMSans_600SemiBold",
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      color: "#6B7280",
+      marginBottom: 10,
+    }}>
+      {title}
+    </Text>
+  );
+}
+
 export default function JobDetailScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -189,6 +276,7 @@ export default function JobDetailScreen() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const isDark = colors.bgBase === "#0A0F1A";
+  const insets = useSafeAreaInsets();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -228,22 +316,7 @@ export default function JobDetailScreen() {
     return t("jobs.notSpecified");
   };
 
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.bgBase,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#059669" />
-      </View>
-    );
-  }
-
-  if (!job) {
+  if (!job && !loading) {
     return (
       <View
         style={{
@@ -268,10 +341,10 @@ export default function JobDetailScreen() {
     );
   }
 
-  const urgency = URGENCY_CONFIG[job.urgency] || URGENCY_CONFIG.flexible;
-  const status = STATUS_CONFIG[job.status] || STATUS_CONFIG.open;
-  const location = [job.locality, job.city].filter(Boolean).join(", ");
-  const isOwn = job.posted_by_clerk_id === user?.id;
+  const urgency = URGENCY_CONFIG[job?.urgency ?? "flexible"] || URGENCY_CONFIG.flexible;
+  const status = STATUS_CONFIG[job?.status ?? "open"] || STATUS_CONFIG.open;
+  const location = [job?.locality, job?.city].filter(Boolean).join(", ");
+  const isOwn = job?.posted_by_clerk_id === user?.id;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
@@ -311,435 +384,245 @@ export default function JobDetailScreen() {
           }}
           numberOfLines={1}
         >
-          {t("jobs.jobDetail")}
+          {loading ? t("jobs.jobDetail") : (job?.title ?? t("jobs.jobDetail"))}
         </Text>
-        <View
-          style={{
-            backgroundColor: status.bg,
-            paddingHorizontal: 12,
-            paddingVertical: 5,
-            borderRadius: 20,
-          }}
-        >
-          <Text
+        {!loading && job && (
+          <View
             style={{
-              fontSize: 12,
-              fontFamily: "DMSans_600SemiBold",
-              color: status.color,
-              textTransform: "capitalize",
+              backgroundColor: status.bg,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 20,
             }}
           >
-            {job.status}
-          </Text>
-        </View>
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: "DMSans_600SemiBold",
+                color: status.color,
+                textTransform: "capitalize",
+              }}
+            >
+              {job.status}
+            </Text>
+          </View>
+        )}
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: isOwn ? 30 : 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View
-          style={{
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          }}
-        >
-          {/* Image Carousel */}
-          {job.images.length > 0 && (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              style={{ marginTop: 4 }}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-            >
-              {job.images.map((url, i) => (
-                <Image
-                  key={`img-${i}`}
-                  source={{ uri: url }}
-                  style={{
-                    width: IMAGE_WIDTH,
-                    height: 200,
-                    borderRadius: 18,
-                  }}
-                  resizeMode="cover"
-                />
-              ))}
-            </ScrollView>
-          )}
+      {/* Skeleton while loading */}
+      {loading && <JobDetailSkeleton colors={colors} isDark={isDark} />}
 
-          <View style={{ paddingHorizontal: 20, marginTop: job.images.length > 0 ? 18 : 12 }}>
-            {/* Title + Urgency Badge */}
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+      {/* Content */}
+      {!loading && job && (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: isOwn ? 30 + insets.bottom : 100 + insets.bottom }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
+            {/* ── Images ── */}
+            {job.images.length > 0 && (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 8 }}
+                contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+              >
+                {job.images.map((url, i) => (
+                  <Image
+                    key={`img-${i}`}
+                    source={{ uri: url }}
+                    style={{ width: IMAGE_WIDTH, height: 200, borderRadius: 18 }}
+                    resizeMode="cover"
+                  />
+                ))}
+              </ScrollView>
+            )}
+
+            <View style={{ paddingHorizontal: 20, marginTop: job.images.length > 0 ? 20 : 16 }}>
+
+              {/* ── Title ── */}
               <Text
                 style={{
-                  flex: 1,
-                  fontSize: 22,
+                  fontSize: 24,
                   fontFamily: "DMSans_700Bold",
                   color: colors.textPrimary,
-                  lineHeight: 28,
+                  lineHeight: 32,
                 }}
               >
                 {job.title}
               </Text>
-            </View>
 
-            {/* Meta Row: Location + Time + Urgency */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 8,
-                marginTop: 10,
-              }}
-            >
-              {location ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 8,
-                  }}
-                >
-                  <FontAwesome name="map-marker" size={11} color={colors.textTertiary} />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontFamily: "DMSans_500Medium",
-                      color: colors.textSecondary,
-                    }}
-                  >
-                    {location}
-                  </Text>
+              {/* ── Meta chips ── */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                {location ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <FontAwesome name="map-marker" size={12} color={colors.textTertiary} />
+                    <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{location}</Text>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: urgency.bg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                  <FontAwesome name={urgency.icon} size={12} color={urgency.color} />
+                  <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: urgency.color }}>{urgency.label}</Text>
                 </View>
-              ) : null}
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                }}
-              >
-                <FontAwesome name="clock-o" size={11} color={colors.textTertiary} />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "DMSans_500Medium",
-                    color: colors.textSecondary,
-                  }}
-                >
-                  {formatTimeAgo(job.created_at)}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                  <FontAwesome name="clock-o" size={12} color={colors.textTertiary} />
+                  <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary }}>{formatTimeAgo(job.created_at)}</Text>
+                </View>
               </View>
 
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: urgency.bg,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                }}
-              >
-                <FontAwesome name={urgency.icon} size={11} color={urgency.color} />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "DMSans_600SemiBold",
-                    color: urgency.color,
-                  }}
-                >
-                  {urgency.label}
-                </Text>
-              </View>
-            </View>
+              {/* ── Divider ── */}
+              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
 
-            {/* Budget Card */}
-            <View
-              style={{
-                marginTop: 20,
-                backgroundColor: isDark ? "rgba(5,150,105,0.08)" : "rgba(5,150,105,0.05)",
-                borderRadius: 16,
-                padding: 16,
-                flexDirection: "row",
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: isDark ? "rgba(5,150,105,0.15)" : "rgba(5,150,105,0.1)",
-              }}
-            >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  backgroundColor: "#059669",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 14,
-                }}
-              >
-                <FontAwesome name="money" size={18} color="#FFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontFamily: "DMSans_500Medium",
-                    color: colors.textTertiary,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  {t("jobs.budget")}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontFamily: "DMSans_700Bold",
-                    color: "#059669",
-                    marginTop: 2,
-                  }}
-                >
-                  {formatBudget()}
-                </Text>
-              </View>
-            </View>
-
-            {/* Schedule Row */}
-            {(job.required_date || job.required_time_slot) && (
-              <View
-                style={{
-                  marginTop: 12,
-                  flexDirection: "row",
-                  gap: 10,
-                }}
-              >
-                {job.required_date && (
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: colors.bgSurface,
-                      borderRadius: 14,
-                      padding: 14,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                  >
-                    <FontAwesome name="calendar-check-o" size={16} color="#3B82F6" />
-                    <View>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontFamily: "DMSans_500Medium",
-                          color: colors.textTertiary,
-                          textTransform: "uppercase",
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        {t("jobs.requiredDate")}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontFamily: "DMSans_600SemiBold",
-                          color: colors.textPrimary,
-                          marginTop: 1,
-                        }}
-                      >
-                        {job.required_date}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-                {job.required_time_slot && (
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: colors.bgSurface,
-                      borderRadius: 14,
-                      padding: 14,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                  >
-                    <FontAwesome name="clock-o" size={16} color="#8B5CF6" />
-                    <View>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontFamily: "DMSans_500Medium",
-                          color: colors.textTertiary,
-                          textTransform: "uppercase",
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        {t("jobs.timeSlot")}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontFamily: "DMSans_600SemiBold",
-                          color: colors.textPrimary,
-                          marginTop: 1,
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {job.required_time_slot}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Description */}
-            <View style={{ marginTop: 22 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontFamily: "DMSans_600SemiBold",
-                  color: colors.textTertiary,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                  marginBottom: 10,
-                }}
-              >
-                {t("jobs.description")}
-              </Text>
+              {/* ── Description ── */}
+              <SectionHeader title={t("jobs.description")} />
               <Text
                 style={{
                   fontSize: 15,
                   fontFamily: "DMSans_400Regular",
                   color: colors.textPrimary,
-                  lineHeight: 23,
+                  lineHeight: 25,
                 }}
               >
                 {job.description}
               </Text>
-            </View>
 
-            {/* Stats Row */}
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 22 }}>
-              <InfoChip
-                icon="eye"
-                label={t("jobs.views")}
-                value={String(job.view_count)}
-                iconColor="#3B82F6"
-                colors={colors}
-                isDark={isDark}
-              />
-              <InfoChip
-                icon="comments"
-                label={t("jobs.responses")}
-                value={String(job.conversation_count)}
-                iconColor="#8B5CF6"
-                colors={colors}
-                isDark={isDark}
-              />
-              <InfoChip
-                icon="flag"
-                label={t("jobs.status")}
-                value={job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                iconColor={status.color}
-                colors={colors}
-                isDark={isDark}
-              />
-            </View>
+              {/* ── Divider ── */}
+              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
 
-            {/* Job Poster Card */}
-            {!isOwn && (
+              {/* ── Budget ── */}
+              <SectionHeader title={t("jobs.budget")} />
               <View
                 style={{
-                  marginTop: 22,
-                  backgroundColor: colors.bgSurface,
-                  borderRadius: 18,
+                  backgroundColor: isDark ? "rgba(5,150,105,0.1)" : "rgba(5,150,105,0.06)",
+                  borderRadius: 16,
                   padding: 16,
                   flexDirection: "row",
                   alignItems: "center",
                   borderWidth: 1,
-                  borderColor: colors.border,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: isDark ? 0.2 : 0.05,
-                  shadowRadius: 8,
-                  elevation: 3,
+                  borderColor: isDark ? "rgba(5,150,105,0.2)" : "rgba(5,150,105,0.12)",
                 }}
               >
-                <View
-                  style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: 16,
-                    backgroundColor: "#059669",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontFamily: "DMSans_700Bold",
-                      color: "#FFF",
-                    }}
-                  >
-                    {(job.posted_by_name || "U").charAt(0).toUpperCase()}
-                  </Text>
+                <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: "#059669", alignItems: "center", justifyContent: "center", marginRight: 14 }}>
+                  <FontAwesome name="money" size={20} color="#FFF" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontFamily: "DMSans_600SemiBold",
-                      color: colors.textPrimary,
-                    }}
-                  >
-                    {job.posted_by_name || t("chat.user")}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontFamily: "DMSans_400Regular",
-                      color: colors.textSecondary,
-                      marginTop: 2,
-                    }}
-                  >
-                    {t("jobs.jobPoster")}
-                  </Text>
-                  <View style={{ marginTop: 4 }}>
-                    <StarRating
-                      avg={job.poster_rating_avg ?? 0}
-                      count={job.poster_rating_count ?? 0}
-                      colors={colors}
-                    />
+                <Text style={{ fontSize: 22, fontFamily: "DMSans_700Bold", color: "#059669" }}>
+                  {formatBudget()}
+                </Text>
+              </View>
+
+              {/* ── Schedule ── */}
+              {(job.required_date || job.required_time_slot) && (
+                <>
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.schedule")} />
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    {job.required_date && (
+                      <View style={{ flex: 1, backgroundColor: colors.bgSurface, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border }}>
+                        <FontAwesome name="calendar-check-o" size={18} color="#3B82F6" />
+                        <View>
+                          <Text style={{ fontSize: 11, fontFamily: "DMSans_500Medium", color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 0.3 }}>{t("jobs.requiredDate")}</Text>
+                          <Text style={{ fontSize: 14, fontFamily: "DMSans_600SemiBold", color: colors.textPrimary, marginTop: 2 }}>{job.required_date}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {job.required_time_slot && (
+                      <View style={{ flex: 1, backgroundColor: colors.bgSurface, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border }}>
+                        <FontAwesome name="clock-o" size={18} color="#8B5CF6" />
+                        <View>
+                          <Text style={{ fontSize: 11, fontFamily: "DMSans_500Medium", color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 0.3 }}>{t("jobs.timeSlot")}</Text>
+                          <Text style={{ fontSize: 14, fontFamily: "DMSans_600SemiBold", color: colors.textPrimary, marginTop: 2, textTransform: "capitalize" }}>{job.required_time_slot}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* ── Address ── */}
+              {job.address_line ? (
+                <>
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.address")} />
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: colors.bgSurface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.border }}>
+                    <FontAwesome name="map-marker" size={18} color="#EF4444" style={{ marginTop: 1 }} />
+                    <Text style={{ flex: 1, fontSize: 14, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 22 }}>{job.address_line}</Text>
+                  </View>
+                </>
+              ) : null}
+
+              {/* ── Activity ── */}
+              <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isDark ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.1)" }}>
+                  <FontAwesome name="eye" size={15} color="#3B82F6" />
+                  <View>
+                    <Text style={{ fontSize: 16, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>{job.view_count}</Text>
+                    <Text style={{ fontSize: 11, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>{t("jobs.views")}</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: isDark ? "rgba(139,92,246,0.08)" : "rgba(139,92,246,0.05)", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isDark ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.1)" }}>
+                  <FontAwesome name="comments" size={15} color="#8B5CF6" />
+                  <View>
+                    <Text style={{ fontSize: 16, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>{job.conversation_count}</Text>
+                    <Text style={{ fontSize: 11, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>{t("jobs.responses")}</Text>
                   </View>
                 </View>
               </View>
-            )}
-          </View>
-        </Animated.View>
-      </ScrollView>
 
-      {/* Bottom CTA */}
-      {job.status === "open" && !isOwn && (
+              {/* ── Posted by ── */}
+              {!isOwn && (
+                <>
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.postedBy")} />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/user/${job.posted_by_user_id}`)}
+                    style={{
+                      backgroundColor: colors.bgSurface,
+                      borderRadius: 18,
+                      padding: 16,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: isDark ? 0.2 : 0.05,
+                      shadowRadius: 8,
+                      elevation: 3,
+                    }}
+                  >
+                    <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: "#059669", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 20, fontFamily: "DMSans_700Bold", color: "#FFF" }}>
+                        {(job.posted_by_name || "U").charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ marginLeft: 14, flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontFamily: "DMSans_600SemiBold", color: colors.textPrimary }}>
+                        {job.posted_by_name || t("chat.user")}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontFamily: "DMSans_400Regular", color: colors.textSecondary, marginTop: 2 }}>
+                        {t("jobs.jobPoster")}
+                      </Text>
+                      <View style={{ marginTop: 5 }}>
+                        <StarRating avg={job.poster_rating_avg ?? 0} count={job.poster_rating_count ?? 0} colors={colors} />
+                      </View>
+                    </View>
+                    <FontAwesome name="chevron-right" size={14} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                </>
+              )}
+
+            </View>
+          </Animated.View>
+        </ScrollView>
+      )}
+
+      {/* ── Bottom CTA ── */}
+      {!loading && job?.status === "open" && !isOwn && (
         <View
           style={{
             position: "absolute",
@@ -747,8 +630,8 @@ export default function JobDetailScreen() {
             left: 0,
             right: 0,
             paddingHorizontal: 20,
-            paddingBottom: 34,
-            paddingTop: 16,
+            paddingTop: 14,
+            paddingBottom: 16 + insets.bottom,
             backgroundColor: colors.bgBase,
             borderTopWidth: 1,
             borderTopColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
@@ -786,13 +669,7 @@ export default function JobDetailScreen() {
             }}
           >
             <FontAwesome name="commenting" size={18} color="#FFF" />
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: "DMSans_700Bold",
-                color: "#FFF",
-              }}
-            >
+            <Text style={{ fontSize: 16, fontFamily: "DMSans_700Bold", color: "#FFF" }}>
               {t("jobs.messageAboutJob")}
             </Text>
           </TouchableOpacity>

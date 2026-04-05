@@ -1,5 +1,7 @@
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useCallback } from "react";
+import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useUserStore } from "@/store/user";
@@ -115,6 +117,19 @@ export default function ProfileScreen() {
   const { usagePreference, location } = useUserStore();
   const router = useRouter();
   const colors = useThemeColors();
+  const isDark = colors.bgBase === "#0A0F1A";
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return;
+      setStatusBarBackgroundColor("#059669", false);
+      setStatusBarStyle("light");
+      return () => {
+        setStatusBarBackgroundColor(isDark ? "#0A0F1A" : "#F8FAFC", false);
+        setStatusBarStyle(isDark ? "light" : "dark");
+      };
+    }, [isDark])
+  );
 
   const initials =
     (user?.firstName?.[0] || "").toUpperCase() +
@@ -132,7 +147,7 @@ export default function ProfileScreen() {
       <View
         style={{
           backgroundColor: "#059669",
-          paddingTop: 56,
+          paddingTop: Platform.OS === "ios" ? 56 : 44,
           paddingBottom: 52,
           borderBottomLeftRadius: 32,
           borderBottomRightRadius: 32,

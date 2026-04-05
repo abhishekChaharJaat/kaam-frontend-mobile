@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export type UsagePreference = "find_worker" | "find_work";
+export type OnboardingStep = "basic-info" | "location-permission" | "usage-preference" | null;
 
 interface LocationData {
   latitude: number;
@@ -13,11 +14,13 @@ interface LocationData {
 interface UserState {
   usagePreference: UsagePreference;
   isOnboardingComplete: boolean;
+  onboardingStep: OnboardingStep;
   isLoaded: boolean;
   location: LocationData | null;
 
   setUsagePreference: (pref: UsagePreference) => void;
   setOnboardingComplete: (complete: boolean) => void;
+  setOnboardingStep: (step: OnboardingStep) => void;
   setLocation: (loc: LocationData) => void;
   loadUser: () => Promise<void>;
 }
@@ -50,8 +53,13 @@ async function persist(state: {
 export const useUserStore = create<UserState>((set, get) => ({
   usagePreference: "find_worker",
   isOnboardingComplete: false,
+  onboardingStep: null,
   isLoaded: false,
   location: null,
+
+  setOnboardingStep: (step) => {
+    set({ onboardingStep: step });
+  },
 
   setUsagePreference: (pref) => {
     set({ usagePreference: pref });
