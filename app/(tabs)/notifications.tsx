@@ -1,0 +1,154 @@
+import { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from "react-native";
+import { useRouter } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useAuth } from "@clerk/clerk-expo";
+import { useTranslation } from "react-i18next";
+import { api } from "@/lib/api";
+
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  reference_id?: string;
+  reference_type?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+const ICON_MAP: Record<string, { name: React.ComponentProps<typeof FontAwesome>["name"]; color: string; bg: string }> = {
+  new_message: { name: "comment", color: "#3B82F6", bg: "bg-info-ghost" },
+  new_job: { name: "briefcase", color: "#059669", bg: "bg-primary-ghost" },
+  job_assigned: { name: "check-circle", color: "#10B981", bg: "bg-success-ghost" },
+  job_reopened: { name: "refresh", color: "#F59E0B", bg: "bg-warning-ghost" },
+  job_closed: { name: "times-circle", color: "#EF4444", bg: "bg-error-ghost" },
+  system_alert: { name: "bell", color: "#9CA3AF", bg: "bg-bg-elevated" },
+};
+
+export default function NotificationsScreen() {
+  const { t } = useTranslation();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { getToken } = useAuth();
+  const router = useRouter();
+
+  const fetchNotifications = async () => {
+    try {
+      const token = await getToken();
+      const data = await api<Notification[]>("/notifications", { token });
+      setNotifications(data);
+    } catch {
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const markRead = async (id: string) => {
+    try {
+      const token = await getToken();
+      await api(`/notifications/${id}/read`, { method: "PATCH", token });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+    } catch {}
+  };
+
+  const handleTap = (item: Notification) => {
+    if (!item.is_read) markRead(item.id);
+    if (item.reference_type === "job" && item.reference_id) {
+      router.push(`/job/${item.reference_id}`);
+    } else if (item.reference_type === "conversation" && item.reference_id) {
+      router.push(`/chat/${item.reference_id}`);
+    }
+  };
+
+  const renderItem = ({ item }: { item: Notification }) => {
+    const iconInfo = ICON_MAP[item.type] || ICON_MAP.system_alert;
+    return (
+      <TouchableOpacity
+        className={`flex-row items-start px-5 py-4 ${
+          !item.is_read ? "bg-primary/[0.03]" : ""
+        }`}
+        onPress={() => handleTap(item)}
+        activeOpacity={0.6}
+      >
+        <View className={`w-10 h-10 rounded-lg items-center justify-center ${iconInfo.bg}`}>
+          <FontAwesome name={iconInfo.name} size={16} color={iconInfo.color} />
+        </View>
+        <View className="flex-1 ml-3">
+          <Text
+            className={`text-body font-sans-medium ${
+              item.is_read ? "text-text-secondary" : "text-text-primary"
+            }`}
+          >
+            {item.title}
+          </Text>
+          <Text className="text-body-sm text-text-tertiary mt-0.5">
+            {item.body}
+          </Text>
+        </View>
+        {!item.is_read && (
+          <View className="bg-primary w-2 h-2 rounded-full mt-2" />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-bg-base items-center justify-center">
+        <ActivityIndicator size="large" color="#059669" />
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-bg-base">
+      <View className="px-5 pt-14 pb-4">
+        <Text className="text-h1 text-text-primary font-sans-bold">
+          {t("notifications.title")}
+        </Text>
+      </View>
+      <FlatList
+        data={notifications}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        ItemSeparatorComponent={() => (
+          <View className="h-px bg-border mx-5" />
+        )}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchNotifications(); }}
+            tintColor="#059669"
+          />
+        }
+        ListEmptyComponent={
+          <View className="items-center py-16">
+            <View className="bg-bg-surface w-16 h-16 rounded-full items-center justify-center mb-4">
+              <FontAwesome name="bell-slash-o" size={24} color="#4B5563" />
+            </View>
+            <Text className="text-body text-text-tertiary">
+              {t("notifications.noNotifications")}
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}

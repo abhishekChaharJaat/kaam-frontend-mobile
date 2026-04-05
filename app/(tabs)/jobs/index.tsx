@@ -1,0 +1,165 @@
+import { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from "react-native";
+import { useRouter } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useAuth } from "@clerk/clerk-expo";
+import { useTranslation } from "react-i18next";
+import { api } from "@/lib/api";
+
+interface Job {
+  id: string;
+  title: string;
+  category_id: string;
+  budget_type: string;
+  budget_min?: number;
+  budget_max?: number;
+  urgency: string;
+  status: string;
+  city?: string;
+  locality?: string;
+  conversation_count: number;
+  created_at: string;
+}
+
+export default function JobsFeed() {
+  const { t } = useTranslation();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { getToken } = useAuth();
+  const router = useRouter();
+
+  const fetchJobs = async () => {
+    try {
+      const token = await getToken();
+      const data = await api<Job[]>("/jobs", { token });
+      setJobs(data);
+    } catch {
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const formatBudget = (job: Job) => {
+    if (job.budget_type === "negotiable") return t("jobs.negotiable");
+    if (job.budget_type === "discuss") return t("jobs.discuss");
+    if (job.budget_min && job.budget_max)
+      return `₹${job.budget_min} - ₹${job.budget_max}`;
+    if (job.budget_min) return `₹${job.budget_min}+`;
+    return "";
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-bg-base items-center justify-center">
+        <ActivityIndicator size="large" color="#059669" />
+      </View>
+    );
+  }
+
+  const renderJob = ({ item }: { item: Job }) => (
+    <TouchableOpacity
+      className="bg-bg-surface border border-border rounded-xl p-4 mb-3 mx-5"
+      onPress={() => router.push(`/job/${item.id}`)}
+      activeOpacity={0.7}
+    >
+      <View className="flex-row justify-between items-start mb-2">
+        <Text className="text-body-lg text-text-primary font-sans-semibold flex-1 mr-2">
+          {item.title}
+        </Text>
+        <View
+          className={`px-2 py-0.5 rounded-full ${
+            item.urgency === "urgent"
+              ? "bg-error-ghost"
+              : item.urgency === "today"
+              ? "bg-warning-ghost"
+              : "bg-bg-elevated"
+          }`}
+        >
+          <Text
+            className={`text-caption font-sans-medium capitalize ${
+              item.urgency === "urgent"
+                ? "text-error"
+                : item.urgency === "today"
+                ? "text-warning"
+                : "text-text-tertiary"
+            }`}
+          >
+            {item.urgency}
+          </Text>
+        </View>
+      </View>
+
+      <View className="flex-row items-center mb-2">
+        <FontAwesome name="map-marker" size={12} color="#6B7280" />
+        <Text className="text-body-sm text-text-secondary ml-1.5">
+          {item.locality ? `${item.locality}, ` : ""}
+          {item.city || t("common.nearby")}
+        </Text>
+      </View>
+
+      <View className="flex-row justify-between items-center">
+        <Text className="text-body-sm text-primary font-sans-semibold">
+          {formatBudget(item)}
+        </Text>
+        <View className="flex-row items-center">
+          <FontAwesome name="comments-o" size={12} color="#6B7280" />
+          <Text className="text-caption text-text-tertiary ml-1">
+            {item.conversation_count}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View className="flex-1 bg-bg-base">
+      <View className="flex-row justify-between items-center px-5 pt-14 pb-4">
+        <Text className="text-h1 text-text-primary font-sans-bold">
+          {t("jobs.nearbyJobs")}
+        </Text>
+        <TouchableOpacity
+          className="w-10 h-10 bg-bg-surface border border-border rounded-lg items-center justify-center"
+        >
+          <FontAwesome name="sliders" size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={jobs}
+        renderItem={renderJob}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchJobs(); }}
+            tintColor="#059669"
+          />
+        }
+        ListEmptyComponent={
+          <View className="items-center py-16">
+            <View className="bg-bg-surface w-16 h-16 rounded-full items-center justify-center mb-4">
+              <FontAwesome name="briefcase" size={24} color="#4B5563" />
+            </View>
+            <Text className="text-body text-text-tertiary">
+              {t("jobs.noJobsNearby")}
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
