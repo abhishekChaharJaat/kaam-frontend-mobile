@@ -117,7 +117,8 @@
     "titlePlaceholder": "जैसे: बाथरूम नल की मरम्मत",
     "schedule": "शेड्यूल",
     "address": "पता",
-    "postedBy": "पोस्ट किया"
+    "postedBy": "पोस्ट किया",
+    "openInMaps": "मैप में खोलें"
   },
   "chat": {
     "chats": "चैट",

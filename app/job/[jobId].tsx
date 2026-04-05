@@ -8,6 +8,8 @@ import {
   Image,
   Animated,
   Dimensions,
+  Linking,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -17,6 +19,7 @@ import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/lib/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 
 interface JobDetail {
   id: string;
@@ -31,6 +34,8 @@ interface JobDetail {
   city?: string;
   locality?: string;
   address_line?: string;
+  latitude?: number;
+  longitude?: number;
   posted_by_user_id: string;
   posted_by_clerk_id?: string;
   posted_by_name?: string;
@@ -615,6 +620,81 @@ export default function JobDetailScreen() {
                   </TouchableOpacity>
                 </>
               )}
+
+              {/* ── Location Map ── */}
+              {(job.latitude && job.longitude) || job.city ? (
+                <>
+                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                  <SectionHeader title={t("jobs.location")} />
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      const lat = job.latitude ?? 0;
+                      const lng = job.longitude ?? 0;
+                      const label = encodeURIComponent([job.address_line, job.locality, job.city].filter(Boolean).join(", "));
+                      const url = Platform.OS === "ios"
+                        ? `maps:0,0?q=${label}@${lat},${lng}`
+                        : `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+                      Linking.openURL(url);
+                    }}
+                    style={{ borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}
+                  >
+                    {job.latitude && job.longitude ? (
+                      <MapView
+                        provider={PROVIDER_GOOGLE}
+                        style={{ width: "100%", height: 200 }}
+                        initialRegion={{
+                          latitude: job.latitude,
+                          longitude: job.longitude,
+                          latitudeDelta: 0.01,
+                          longitudeDelta: 0.01,
+                        }}
+                        scrollEnabled={false}
+                        zoomEnabled={false}
+                        pitchEnabled={false}
+                        rotateEnabled={false}
+                        pointerEvents="none"
+                      >
+                        <Marker
+                          coordinate={{ latitude: job.latitude, longitude: job.longitude }}
+                          title={job.title}
+                          description={[job.locality, job.city].filter(Boolean).join(", ")}
+                        />
+                      </MapView>
+                    ) : (
+                      /* No coords — show a placeholder with the area name */
+                      <View style={{ height: 200, backgroundColor: isDark ? "#1F2937" : "#E5E7EB", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <FontAwesome name="map-marker" size={36} color="#059669" />
+                        <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: isDark ? "#9CA3AF" : "#6B7280" }}>
+                          {[job.locality, job.city].filter(Boolean).join(", ")}
+                        </Text>
+                      </View>
+                    )}
+                    {/* Overlay label at bottom */}
+                    <View style={{
+                      position: "absolute",
+                      bottom: 0, left: 0, right: 0,
+                      backgroundColor: isDark ? "rgba(17,24,39,0.85)" : "rgba(255,255,255,0.88)",
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}>
+                      <FontAwesome name="map-marker" size={14} color="#059669" />
+                      <Text style={{ flex: 1, fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textPrimary }} numberOfLines={1}>
+                        {[job.address_line, job.locality, job.city].filter(Boolean).join(", ") || t("jobs.location")}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(5,150,105,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                        <FontAwesome name="external-link" size={10} color="#059669" />
+                        <Text style={{ fontSize: 11, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
+                          {t("jobs.openInMaps")}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : null}
 
             </View>
           </Animated.View>

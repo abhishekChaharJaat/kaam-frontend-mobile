@@ -117,7 +117,8 @@
     "titlePlaceholder": "e.g. Bathroom tap leak repair",
     "schedule": "Schedule",
     "address": "Address",
-    "postedBy": "Posted By"
+    "postedBy": "Posted By",
+    "openInMaps": "Open in Maps"
   },
   "chat": {
     "chats": "Chats",
