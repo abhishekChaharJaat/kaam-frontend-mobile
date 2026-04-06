@@ -220,7 +220,7 @@ export default function SettingsScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           activeOpacity={0.7}
           style={{
             width: 38,

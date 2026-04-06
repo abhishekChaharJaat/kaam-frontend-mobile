@@ -371,7 +371,7 @@ export default function JobDetailScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           style={{
             width: 38,
             height: 38,

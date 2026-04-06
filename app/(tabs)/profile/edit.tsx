@@ -123,7 +123,7 @@ export default function EditProfileScreen() {
         },
       });
       showToast(t("profile.saved"), "success");
-      router.back();
+      (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
     } catch {
       showToast(t("common.error"), "error");
     } finally {
@@ -176,7 +176,7 @@ export default function EditProfileScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           activeOpacity={0.7}
           style={{
             width: 38,

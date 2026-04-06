@@ -299,7 +299,7 @@ export default function AssignedJobsScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           style={{
             width: 36,
             height: 36,

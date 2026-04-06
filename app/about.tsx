@@ -13,7 +13,7 @@ export default function AboutScreen() {
   return (
     <View className="flex-1 bg-bg-base pt-12">
       <View className="flex-row items-center px-4 mb-4">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} className="mr-3">
           <FontAwesome name="arrow-left" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text className="text-h3 text-text-primary font-sans-bold">

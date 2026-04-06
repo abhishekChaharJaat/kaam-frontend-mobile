@@ -182,7 +182,7 @@ export default function PostJob() {
       <View className="pt-14 px-5 pb-4">
         <View className="flex-row items-center justify-between mb-5">
           <TouchableOpacity
-            onPress={() => (step > 1 ? animateStep(step - 1) : router.back())}
+            onPress={() => (step > 1 ? animateStep(step - 1) : (router.canGoBack() ? router.back() : router.replace('/(tabs)')))}
             className="w-10 h-10 bg-bg-surface border border-border rounded-full items-center justify-center"
           >
             <FontAwesome name="arrow-left" size={16} color={colors.textPrimary} />
@@ -193,7 +193,7 @@ export default function PostJob() {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
             className="w-10 h-10 items-center justify-center"
           >
             <FontAwesome name="times" size={18} color="#6B7280" />
