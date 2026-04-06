@@ -36,6 +36,7 @@ interface Job {
   view_count?: number;
   category_id?: string;
   category_name?: string;
+  category_slug?: string;
 }
 
 const URGENCY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
@@ -522,7 +523,7 @@ export default function HomeScreen() {
   const filterByCategory = (jobs: Job[]) =>
     selectedCategories.size === 0
       ? jobs
-      : jobs.filter(j => selectedCategories.has(j.category_id ?? ""));
+      : jobs.filter(j => selectedCategories.has(j.category_slug ?? ""));
 
   const filteredCityJobs = filterByCategory(cityJobs);
   const filteredOtherJobs = filterByCategory(otherJobs);
