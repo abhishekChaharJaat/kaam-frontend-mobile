@@ -9,6 +9,7 @@ import {
   Animated,
   Platform,
   TextInput,
+  Modal,
 } from "react-native";
 
 import { useRouter, useFocusEffect } from "expo-router";
@@ -33,6 +34,8 @@ interface Job {
   conversation_count: number;
   created_at?: string;
   view_count?: number;
+  category_id?: string;
+  category_name?: string;
 }
 
 const URGENCY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
@@ -381,7 +384,11 @@ function HomeSkeleton({ isDark }: { isDark: boolean }) {
 
 export default function HomeScreen() {
   const { t } = useTranslation();
+  const [cityJobs, setCityJobs] = useState<Job[]>([]);
+  const [otherJobs, setOtherJobs] = useState<Job[]>([]);
   const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [filterVisible, setFilterVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -442,6 +449,17 @@ export default function HomeScreen() {
       }
       const jobs = await api<Job[]>(endpoint, { token });
       setNearbyJobs(jobs);
+      if (usagePreference !== "find_worker") {
+        const userCity = location?.city?.toLowerCase().trim();
+        const near = userCity
+          ? jobs.filter(j => j.city?.toLowerCase().trim() === userCity)
+          : jobs;
+        const other = userCity
+          ? jobs.filter(j => j.city?.toLowerCase().trim() !== userCity)
+          : [];
+        setCityJobs(near);
+        setOtherJobs(other);
+      }
     } catch {
     } finally {
       setLoading(false);
@@ -477,6 +495,38 @@ export default function HomeScreen() {
     : location?.city || t("common.setLocation");
 
   const isEmployer = usagePreference === "find_worker";
+
+  const CATEGORIES = [
+    { id: "plumber", name: "Plumber" },
+    { id: "electrician", name: "Electrician" },
+    { id: "carpenter", name: "Carpenter" },
+    { id: "painter", name: "Painter" },
+    { id: "mason", name: "Mason / Mistri" },
+    { id: "labour", name: "Labour / Helper" },
+    { id: "ac-repair", name: "AC Repair" },
+    { id: "ro-repair", name: "RO Repair" },
+    { id: "cctv", name: "CCTV Technician" },
+    { id: "welder", name: "Welder" },
+    { id: "tile-worker", name: "Tile Worker" },
+    { id: "pop-false-ceiling", name: "POP / False Ceiling" },
+    { id: "house-cleaning", name: "House Cleaning" },
+    { id: "appliance-repair", name: "Appliance Repair" },
+    { id: "pest-control", name: "Pest Control" },
+    { id: "furniture", name: "Furniture Work" },
+    { id: "borewell", name: "Borewell / Water Tank" },
+    { id: "civil-contractor", name: "Civil Contractor" },
+    { id: "interior", name: "Interior Work" },
+    { id: "packer-mover", name: "Packer / Mover Helper" },
+  ];
+
+  const filterByCategory = (jobs: Job[]) =>
+    selectedCategories.size === 0
+      ? jobs
+      : jobs.filter(j => selectedCategories.has(j.category_id ?? ""));
+
+  const filteredCityJobs = filterByCategory(cityJobs);
+  const filteredOtherJobs = filterByCategory(otherJobs);
+
   const activeJobs = nearbyJobs.length;
   const totalResponses = nearbyJobs.reduce(
     (sum, j) => sum + j.conversation_count,
@@ -739,49 +789,209 @@ export default function HomeScreen() {
           marginBottom: 14,
         }}
       >
-        <Text
-          style={{
-            fontSize: 18,
-            fontFamily: "DMSans_700Bold",
-            color: colors.textPrimary,
-          }}
-        >
+        <Text style={{ fontSize: 18, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
           {isEmployer ? t("home.myPostedJobs") : t("home.nearbyJobs")}
         </Text>
-        {!isEmployer && nearbyJobs.length > 0 && (
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/jobs")}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "rgba(5,150,105,0.08)",
-              paddingHorizontal: 12,
-              paddingVertical: 5,
-              borderRadius: 8,
-            }}
-          >
-            <Text
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {/* Filter button (worker only) */}
+          {!isEmployer && (
+            <TouchableOpacity
+              onPress={() => setFilterVisible(true)}
+              activeOpacity={0.7}
               style={{
-                fontSize: 12,
-                fontFamily: "DMSans_600SemiBold",
-                color: "#059669",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                backgroundColor: selectedCategories.size > 0 ? "#059669" : isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)",
+                borderWidth: 1,
+                borderColor: selectedCategories.size > 0 ? "#059669" : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+                paddingHorizontal: 11,
+                paddingVertical: 5,
+                borderRadius: 8,
               }}
             >
-              {t("common.seeAll")}
-            </Text>
-            <FontAwesome
-              name="chevron-right"
-              size={9}
-              color="#059669"
-              style={{ marginLeft: 4 }}
-            />
-          </TouchableOpacity>
-        )}
+              <FontAwesome
+                name="sliders"
+                size={12}
+                color={selectedCategories.size > 0 ? "#FFFFFF" : colors.textSecondary}
+              />
+              <Text style={{
+                fontSize: 12,
+                fontFamily: "DMSans_600SemiBold",
+                color: selectedCategories.size > 0 ? "#FFFFFF" : colors.textSecondary,
+              }}>
+                {selectedCategories.size > 0 ? `${selectedCategories.size} Filter${selectedCategories.size > 1 ? "s" : ""}` : "Filter"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!isEmployer && nearbyJobs.length > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)/jobs")}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "rgba(5,150,105,0.08)",
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
+                {t("common.seeAll")}
+              </Text>
+              <FontAwesome name="chevron-right" size={9} color="#059669" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {/* Category Filter Modal */}
+      <Modal
+        visible={filterVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          activeOpacity={1}
+          onPress={() => setFilterVisible(false)}
+        />
+        <View style={{
+          backgroundColor: isDark ? "#111827" : "#FFFFFF",
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingBottom: 32,
+          maxHeight: "75%",
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}>
+          {/* Handle */}
+          <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)" }} />
+          </View>
+
+          {/* Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14 }}>
+            <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
+              Filter by Category
+            </Text>
+            {selectedCategories.size > 0 && (
+              <TouchableOpacity onPress={() => setSelectedCategories(new Set())} activeOpacity={0.7}>
+                <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Clear all</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Category list */}
+          <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 20 }}>
+            {CATEGORIES.map((cat, i) => {
+              const isSelected = selectedCategories.has(cat.id);
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => {
+                    const next = new Set(selectedCategories);
+                    isSelected ? next.delete(cat.id) : next.add(cat.id);
+                    setSelectedCategories(next);
+                  }}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 13,
+                    borderBottomWidth: i < CATEGORIES.length - 1 ? 1 : 0,
+                    borderBottomColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: isSelected ? "#059669" : colors.textPrimary }}>
+                    {cat.name}
+                  </Text>
+                  <View style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    borderWidth: 2,
+                    borderColor: isSelected ? "#059669" : isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)",
+                    backgroundColor: isSelected ? "#059669" : "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {isSelected && <FontAwesome name="check" size={11} color="#FFFFFF" />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Apply button */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+            <TouchableOpacity
+              onPress={() => setFilterVisible(false)}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: "#059669",
+                borderRadius: 14,
+                paddingVertical: 14,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 15, fontFamily: "DMSans_700Bold", color: "#FFFFFF" }}>
+                {selectedCategories.size === 0 ? "Show All Jobs" : `Show ${selectedCategories.size} Categor${selectedCategories.size > 1 ? "ies" : "y"}`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Job List */}
       <View style={{ paddingHorizontal: 20 }}>
+        {isEmployer || nearbyJobs.length === 0 ? null : (
+          <>
+            {/* City jobs */}
+            {location?.city ? (
+              <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary, marginBottom: 10 }}>
+                📍 {location.city}
+              </Text>
+            ) : null}
+
+            {filteredCityJobs.length === 0 && filteredOtherJobs.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 32 }}>
+                <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: colors.textTertiary }}>
+                  No jobs found for selected categories
+                </Text>
+                <TouchableOpacity onPress={() => setSelectedCategories(new Set())} style={{ marginTop: 10 }}>
+                  <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Clear filters</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {filteredCityJobs.map((job, idx) => (
+              <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+            ))}
+
+            {filteredOtherJobs.length > 0 && (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 20, marginBottom: 12 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
+                  <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: colors.textTertiary, marginHorizontal: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    Other Cities
+                  </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
+                </View>
+                {filteredOtherJobs.map((job, idx) => (
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                ))}
+              </>
+            )}
+          </>
+        )}
         {nearbyJobs.length === 0 ? (
           <View
             style={{
@@ -847,7 +1057,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </View>
-        ) : (
+        ) : isEmployer ? (
           nearbyJobs.map((job, idx) => (
             <JobCard
               key={job.id}
@@ -860,7 +1070,7 @@ export default function HomeScreen() {
               isEmployer={isEmployer}
             />
           ))
-        )}
+        ) : null}
       </View>
     </ScrollView>
   );
