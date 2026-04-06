@@ -9,6 +9,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -18,6 +19,7 @@ import { useUserStore } from "@/store/user";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/lib/toast";
+import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 
 interface Category {
   id: string;
@@ -77,6 +79,7 @@ export default function PostJob() {
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
   const [urgency, setUrgency] = useState("flexible");
+  const [requiredDate, setRequiredDate] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
   const [loading, setLoading] = useState(false);
   const { getToken } = useAuth();
@@ -138,6 +141,9 @@ export default function PostJob() {
           budget_min: budgetMin ? parseInt(budgetMin) : undefined,
           budget_max: budgetMax ? parseInt(budgetMax) : undefined,
           urgency,
+          required_date: requiredDate
+            ? requiredDate.toISOString().split("T")[0]
+            : undefined,
           city: location?.city || undefined,
           locality: location?.locality || undefined,
           latitude: location?.latitude || undefined,
@@ -246,6 +252,8 @@ export default function PostJob() {
               setBudgetMax={setBudgetMax}
               urgency={urgency}
               setUrgency={setUrgency}
+              requiredDate={requiredDate}
+              setRequiredDate={setRequiredDate}
             />
           )}
           {step === 3 && (
@@ -256,6 +264,7 @@ export default function PostJob() {
               selectedCategory={selectedCategory}
               formatBudget={formatBudget}
               selectedUrgency={selectedUrgency}
+              requiredDate={requiredDate}
               location={location}
             />
           )}
@@ -267,31 +276,31 @@ export default function PostJob() {
       <View className="px-5 pb-8 pt-4 border-t border-border bg-bg-base">
         {step < 3 ? (
           <TouchableOpacity
-            className={`rounded-xl py-4 items-center ${
-              (step === 1 && !canProceedStep1) ? "bg-bg-elevated" : "bg-primary"
-            }`}
+            className="rounded-full py-4 items-center"
+            style={{
+              backgroundColor: (step === 1 && !canProceedStep1) ? "#D1D5DB" : "#059669",
+            }}
             onPress={() => animateStep(step + 1)}
             disabled={step === 1 && !canProceedStep1}
             activeOpacity={0.8}
           >
             <View className="flex-row items-center">
               <Text
-                className={`text-body-lg font-sans-semibold mr-2 ${
-                  (step === 1 && !canProceedStep1) ? "text-text-disabled" : "text-text-on-primary"
-                }`}
+                className="text-body-lg font-sans-semibold mr-2"
+                style={{ color: (step === 1 && !canProceedStep1) ? "#6B7280" : "#FFF" }}
               >
                 {t("common.continue")}
               </Text>
               <FontAwesome
                 name="arrow-right"
                 size={14}
-                color={(step === 1 && !canProceedStep1) ? "#4B5563" : "#FFF"}
+                color={(step === 1 && !canProceedStep1) ? "#6B7280" : "#FFF"}
               />
             </View>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            className={`rounded-xl py-4 items-center ${loading ? "bg-primary/70" : "bg-primary"}`}
+            className={`rounded-full py-4 items-center ${loading ? "bg-primary/70" : "bg-primary"}`}
             onPress={handlePost}
             disabled={loading}
             activeOpacity={0.8}
@@ -324,14 +333,42 @@ function StepOne({
   setCategoryId: (v: string) => void;
   categories: Category[];
 }) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const colors = useThemeColors();
+
+  const selectedCategory = categoryId === "other"
+    ? { id: "other", name: "Other", slug: "other" }
+    : categories.find((c) => c.id === categoryId);
+
+  const filteredCategories = searchQuery.trim()
+    ? categories.filter((c) =>
+        c.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : categories;
+
+  const openModal = () => {
+    setSearchQuery("");
+    setModalVisible(true);
+  };
+
+  const selectCategory = (id: string) => {
+    setCategoryId(id);
+    setModalVisible(false);
+    setSearchQuery("");
+  };
+
   return (
     <View>
       <View className="mb-6">
-        <Text className="text-body-sm text-text-secondary font-sans-semibold mb-2 uppercase tracking-wider">
-          {t("jobs.jobTitle")}
-        </Text>
+        <View className="flex-row items-center mb-2">
+          <Text className="text-body-sm text-text-secondary font-sans-semibold uppercase tracking-wider">
+            {t("jobs.jobTitle")}
+          </Text>
+          <Text className="text-body-sm font-sans-semibold ml-0.5" style={{ color: "#EF4444" }}> *</Text>
+        </View>
         <TextInput
-          className="bg-bg-surface border border-border rounded-xl px-4 py-4 text-body-lg text-text-primary font-sans-medium"
+          className="bg-bg-surface border border-border rounded-full px-5 py-4 text-body-lg text-text-primary font-sans-medium"
           value={title}
           onChangeText={setTitle}
           placeholder={t("jobs.titlePlaceholder")}
@@ -347,54 +384,205 @@ function StepOne({
       </View>
 
       <View>
-        <Text className="text-body-sm text-text-secondary font-sans-semibold mb-3 uppercase tracking-wider">
-          {t("jobs.selectCategory")}
-        </Text>
-        <View className="flex-row flex-wrap">
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              className={`mr-2.5 mb-3 px-4 py-2.5 rounded-xl border ${
-                categoryId === cat.id
-                  ? "bg-primary border-primary"
-                  : "bg-bg-surface border-border"
-              }`}
-              onPress={() => setCategoryId(cat.id)}
-              activeOpacity={0.7}
-            >
-              <Text
-                className={`text-body-sm font-sans-medium ${
-                  categoryId === cat.id
-                    ? "text-text-on-primary"
-                    : "text-text-secondary"
-                }`}
-              >
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-          {/* Other chip */}
-          <TouchableOpacity
-            className={`mr-2.5 mb-3 px-4 py-2.5 rounded-xl border ${
-              categoryId === "other"
-                ? "bg-primary border-primary"
-                : "bg-bg-surface border-border"
-            }`}
-            onPress={() => setCategoryId("other")}
-            activeOpacity={0.7}
-          >
-            <Text
-              className={`text-body-sm font-sans-medium ${
-                categoryId === "other" ? "text-text-on-primary" : "text-text-secondary"
-              }`}
-            >
-              Other
-            </Text>
-          </TouchableOpacity>
+        <View className="flex-row items-center mb-3">
+          <Text className="text-body-sm text-text-secondary font-sans-semibold uppercase tracking-wider">
+            {t("jobs.selectCategory")}
+          </Text>
+          <Text className="text-body-sm font-sans-semibold ml-0.5" style={{ color: "#EF4444" }}> *</Text>
         </View>
+
+        {/* Dropdown trigger */}
+        <TouchableOpacity
+          onPress={openModal}
+          activeOpacity={0.7}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: colors.bgSurface,
+            borderWidth: 1.5,
+            borderColor: selectedCategory ? "#059669" : colors.border,
+            borderRadius: 999,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+          }}
+        >
+          <FontAwesome
+            name="th-large"
+            size={15}
+            color={selectedCategory ? "#059669" : "#6B7280"}
+            style={{ marginRight: 10 }}
+          />
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 15,
+              fontFamily: selectedCategory ? "DMSans_600SemiBold" : "DMSans_400Regular",
+              color: selectedCategory ? colors.textPrimary : "#6B7280",
+            }}
+          >
+            {selectedCategory ? selectedCategory.name : t("jobs.selectCategory")}
+          </Text>
+          <FontAwesome name="chevron-down" size={13} color="#6B7280" />
+        </TouchableOpacity>
       </View>
+
+      {/* Category picker modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{
+              backgroundColor: colors.bgBase,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: "80%",
+            }}
+          >
+            {/* Handle bar */}
+            <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+            </View>
+
+            {/* Header */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 12 }}>
+              <Text style={{ fontSize: 18, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
+                {t("jobs.selectCategory")}
+              </Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <FontAwesome name="times" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search input */}
+            <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+              <View style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.bgSurface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}>
+                <FontAwesome name="search" size={14} color="#6B7280" style={{ marginRight: 8 }} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search category..."
+                  placeholderTextColor="#6B7280"
+                  style={{
+                    flex: 1,
+                    fontSize: 15,
+                    fontFamily: "DMSans_400Regular",
+                    color: colors.textPrimary,
+                    padding: 0,
+                  }}
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery("")}>
+                    <FontAwesome name="times-circle" size={15} color="#6B7280" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Category list */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ paddingHorizontal: 20 }}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredCategories.length === 0 && searchQuery.trim() !== "" && (
+                <Text style={{ color: "#6B7280", fontFamily: "DMSans_400Regular", textAlign: "center", paddingVertical: 20 }}>
+                  No matching category
+                </Text>
+              )}
+              {filteredCategories.map((cat) => {
+                const isSelected = categoryId === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => selectCategory(cat.id)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 14,
+                      paddingHorizontal: 4,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                    }}
+                  >
+                    <Text style={{
+                      flex: 1,
+                      fontSize: 15,
+                      fontFamily: isSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                      color: isSelected ? "#059669" : colors.textPrimary,
+                    }}>
+                      {cat.name}
+                    </Text>
+                    {isSelected && <FontAwesome name="check" size={14} color="#059669" />}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Other — always at bottom */}
+              {(() => {
+                const isSelected = categoryId === "other";
+                return (
+                  <TouchableOpacity
+                    onPress={() => selectCategory("other")}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 14,
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text style={{
+                      flex: 1,
+                      fontSize: 15,
+                      fontFamily: isSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                      color: isSelected ? "#059669" : colors.textPrimary,
+                    }}>
+                      Other
+                    </Text>
+                    {isSelected && <FontAwesome name="check" size={14} color="#059669" />}
+                  </TouchableOpacity>
+                );
+              })()}
+            </ScrollView>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function StepTwo({
@@ -404,6 +592,7 @@ function StepTwo({
   budgetMin, setBudgetMin,
   budgetMax, setBudgetMax,
   urgency, setUrgency,
+  requiredDate, setRequiredDate,
 }: {
   t: (key: string) => string;
   description: string;
@@ -416,7 +605,48 @@ function StepTwo({
   setBudgetMax: (v: string) => void;
   urgency: string;
   setUrgency: (v: string) => void;
+  requiredDate: Date | null;
+  setRequiredDate: (d: Date | null) => void;
 }) {
+  const [showIOSPicker, setShowIOSPicker] = useState(false);
+  const colors = useThemeColors();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const handleUrgencySelect = (key: string) => {
+    setUrgency(key);
+    if (key === "today") {
+      setRequiredDate(new Date(today));
+    } else if (key === "tomorrow") {
+      setRequiredDate(new Date(tomorrow));
+    }
+  };
+
+  const openDatePicker = () => {
+    if (Platform.OS === "android") {
+      DateTimePickerAndroid.open({
+        value: requiredDate || today,
+        mode: "date",
+        minimumDate: today,
+        onChange: (event, date) => {
+          if (event.type === "set" && date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            setRequiredDate(d);
+            if (d.getTime() === today.getTime()) setUrgency("today");
+            else if (d.getTime() === tomorrow.getTime()) setUrgency("tomorrow");
+            else setUrgency("flexible");
+          }
+        },
+      });
+    } else {
+      setShowIOSPicker(true);
+    }
+  };
+
   return (
     <View>
       {/* Description */}
@@ -425,7 +655,7 @@ function StepTwo({
           {t("jobs.descriptionOptional")}
         </Text>
         <TextInput
-          className="bg-bg-surface border border-border rounded-xl px-4 py-4 text-body text-text-primary"
+          className="bg-bg-surface border border-border rounded-3xl px-5 py-4 text-body text-text-primary"
           value={description}
           onChangeText={setDescription}
           placeholder={t("jobs.describeWork")}
@@ -445,7 +675,7 @@ function StepTwo({
         {BUDGET_TYPES.map((bt) => (
           <TouchableOpacity
             key={bt.key}
-            className={`flex-row items-center p-4 rounded-xl border mb-2.5 ${
+            className={`flex-row items-center px-3 py-2.5 rounded-xl border mb-2 ${
               budgetType === bt.key
                 ? "bg-primary/10 border-primary"
                 : "bg-bg-surface border-border"
@@ -454,7 +684,7 @@ function StepTwo({
             activeOpacity={0.7}
           >
             <View
-              className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
+              className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
                 budgetType === bt.key ? "bg-primary" : "bg-bg-elevated"
               }`}
             >
@@ -465,14 +695,14 @@ function StepTwo({
               />
             </View>
             <Text
-              className={`text-body font-sans-medium flex-1 ${
+              className={`text-body-sm font-sans-medium flex-1 ${
                 budgetType === bt.key ? "text-primary" : "text-text-primary"
               }`}
             >
               {t(bt.labelKey)}
             </Text>
             {budgetType === bt.key && (
-              <FontAwesome name="check-circle" size={18} color="#059669" />
+              <FontAwesome name="check-circle" size={15} color="#059669" />
             )}
           </TouchableOpacity>
         ))}
@@ -482,7 +712,7 @@ function StepTwo({
             <View className="flex-1 mr-2">
               <Text className="text-caption text-text-tertiary mb-1">{t("jobs.min")}</Text>
               <TextInput
-                className="bg-bg-surface border border-border rounded-xl px-4 py-3.5 text-body text-text-primary text-center"
+                className="bg-bg-surface border border-border rounded-full px-4 py-3.5 text-body text-text-primary text-center"
                 value={budgetMin}
                 onChangeText={setBudgetMin}
                 keyboardType="numeric"
@@ -493,7 +723,7 @@ function StepTwo({
             <View className="flex-1 ml-2">
               <Text className="text-caption text-text-tertiary mb-1">{t("jobs.max")}</Text>
               <TextInput
-                className="bg-bg-surface border border-border rounded-xl px-4 py-3.5 text-body text-text-primary text-center"
+                className="bg-bg-surface border border-border rounded-full px-4 py-3.5 text-body text-text-primary text-center"
                 value={budgetMax}
                 onChangeText={setBudgetMax}
                 keyboardType="numeric"
@@ -505,21 +735,23 @@ function StepTwo({
         )}
       </View>
 
-      {/* Urgency */}
-      <View>
+      {/* When needed */}
+      <View className="mb-2">
         <Text className="text-body-sm text-text-secondary font-sans-semibold mb-3 uppercase tracking-wider">
           {t("jobs.whenNeeded")}
         </Text>
-        <View className="flex-row flex-wrap">
+
+        {/* Quick-select chips */}
+        <View className="flex-row flex-wrap mb-3">
           {URGENCY_OPTIONS.map((u) => (
             <TouchableOpacity
               key={u.key}
-              className={`mr-2.5 mb-3 px-4 py-3 rounded-xl border flex-row items-center ${
+              className={`mr-2.5 mb-3 px-4 py-3 rounded-full border flex-row items-center ${
                 urgency === u.key
                   ? "border-primary bg-primary/10"
                   : "bg-bg-surface border-border"
               }`}
-              onPress={() => setUrgency(u.key)}
+              onPress={() => handleUrgencySelect(u.key)}
               activeOpacity={0.7}
             >
               <FontAwesome
@@ -537,14 +769,99 @@ function StepTwo({
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Selected date display / pick date button */}
+        <TouchableOpacity
+          onPress={openDatePicker}
+          activeOpacity={0.7}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: colors.bgSurface,
+            borderWidth: 1.5,
+            borderColor: requiredDate ? "#059669" : colors.border,
+            borderRadius: 999,
+            paddingHorizontal: 16,
+            paddingVertical: 13,
+          }}
+        >
+          <FontAwesome
+            name="calendar"
+            size={15}
+            color={requiredDate ? "#059669" : "#6B7280"}
+            style={{ marginRight: 10 }}
+          />
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 15,
+              fontFamily: requiredDate ? "DMSans_600SemiBold" : "DMSans_400Regular",
+              color: requiredDate ? colors.textPrimary : "#6B7280",
+            }}
+          >
+            {requiredDate ? formatDate(requiredDate) : "Pick a date (optional)"}
+          </Text>
+          {requiredDate ? (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); setRequiredDate(null); setUrgency("flexible"); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <FontAwesome name="times-circle" size={16} color="#6B7280" />
+            </TouchableOpacity>
+          ) : (
+            <FontAwesome name="chevron-right" size={13} color="#6B7280" />
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* iOS date picker modal */}
+      {Platform.OS === "ios" && (
+        <Modal
+          visible={showIOSPicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowIOSPicker(false)}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+            activeOpacity={1}
+            onPress={() => setShowIOSPicker(false)}
+          />
+          <View style={{ backgroundColor: colors.bgBase, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <TouchableOpacity onPress={() => setShowIOSPicker(false)}>
+                <Text style={{ fontSize: 16, fontFamily: "DMSans_400Regular", color: "#6B7280" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowIOSPicker(false)}>
+                <Text style={{ fontSize: 16, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={requiredDate || today}
+              mode="date"
+              display="spinner"
+              minimumDate={today}
+              onChange={(_, date) => {
+                if (date) {
+                  const d = new Date(date);
+                  d.setHours(0, 0, 0, 0);
+                  setRequiredDate(d);
+                  if (d.getTime() === today.getTime()) setUrgency("today");
+                  else if (d.getTime() === tomorrow.getTime()) setUrgency("tomorrow");
+                  else setUrgency("flexible");
+                }
+              }}
+            />
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
 function StepThree({
   t,
-  title, description, selectedCategory, formatBudget, selectedUrgency, location,
+  title, description, selectedCategory, formatBudget, selectedUrgency, requiredDate, location,
 }: {
   t: (key: string) => string;
   title: string;
@@ -552,6 +869,7 @@ function StepThree({
   selectedCategory?: Category;
   formatBudget: () => string;
   selectedUrgency?: (typeof URGENCY_OPTIONS)[number];
+  requiredDate: Date | null;
   location: { latitude?: number; longitude?: number; city?: string; locality?: string; state?: string } | null;
 }) {
   return (
@@ -579,12 +897,10 @@ function StepThree({
           />
           <ReviewRow icon="money" label={t("jobs.budget")} value={formatBudget()} />
           <ReviewRow
-            icon={selectedUrgency?.icon || "clock-o"}
-            label={t("jobs.urgency")}
-            value={
-              selectedUrgency ? t(selectedUrgency.labelKey) : t("jobs.flexible")
-            }
-            valueColor={selectedUrgency?.color}
+            icon="calendar"
+            label={t("jobs.whenNeeded")}
+            value={requiredDate ? formatDate(requiredDate) : (selectedUrgency ? t(selectedUrgency.labelKey) : t("jobs.flexible"))}
+            valueColor={requiredDate ? "#059669" : selectedUrgency?.color}
           />
           {location?.city && (
             <ReviewRow

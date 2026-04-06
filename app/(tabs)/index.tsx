@@ -389,6 +389,7 @@ export default function HomeScreen() {
   const [otherJobs, setOtherJobs] = useState<Job[]>([]);
   const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [categoryIdToSlug, setCategoryIdToSlug] = useState<Record<string, string>>({});
   const [filterVisible, setFilterVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -424,6 +425,19 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
+  // Build category ID → slug map for reliable client-side filtering
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const cats = await api<{ id: string; slug: string }[]>("/categories", { token });
+        const map: Record<string, string> = {};
+        for (const c of cats) map[c.id] = c.slug;
+        setCategoryIdToSlug(map);
+      } catch {}
+    })();
+  }, []);
+
   const syncUser = async (token: string | null) => {
     if (!token) return;
     try {
@@ -436,7 +450,7 @@ export default function HomeScreen() {
     } catch {}
   };
 
-  const fetchData = async (query?: string) => {
+  const fetchData = async (query?: string, categorySlugs?: string[]) => {
     try {
       const token = await getToken();
       if (!query) await syncUser(token);
@@ -444,19 +458,27 @@ export default function HomeScreen() {
       if (usagePreference === "find_worker") {
         endpoint = "/jobs/mine";
       } else {
-        const params = new URLSearchParams({ limit: "20", exclude_mine: "true" });
+        const params = new URLSearchParams({ limit: "50", exclude_mine: "true" });
         if (query?.trim()) params.set("q", query.trim());
         endpoint = `/jobs?${params.toString()}`;
       }
       const jobs = await api<Job[]>(endpoint, { token });
       setNearbyJobs(jobs);
       if (usagePreference !== "find_worker") {
+        // Always filter client-side using the category ID→slug map (reliable, doesn't need $lookup)
+        const activeCategories = categorySlugs && categorySlugs.length > 0 ? new Set(categorySlugs) : null;
+        const matchesCategory = (j: Job) => {
+          if (!activeCategories) return true;
+          const slug = j.category_slug ?? categoryIdToSlug[j.category_id ?? ""] ?? "";
+          return activeCategories.has(slug);
+        };
         const userCity = location?.city?.toLowerCase().trim();
+        const allMatching = jobs.filter(matchesCategory);
         const near = userCity
-          ? jobs.filter(j => j.city?.toLowerCase().trim() === userCity)
-          : jobs;
+          ? allMatching.filter(j => j.city?.toLowerCase().trim() === userCity)
+          : allMatching;
         const other = userCity
-          ? jobs.filter(j => j.city?.toLowerCase().trim() !== userCity)
+          ? allMatching.filter(j => j.city?.toLowerCase().trim() !== userCity)
           : [];
         setCityJobs(near);
         setOtherJobs(other);
@@ -480,14 +502,14 @@ export default function HomeScreen() {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       setSearching(true);
-      fetchData(text);
+      fetchData(text, Array.from(selectedCategories));
     }, 400);
   };
 
   const clearSearch = () => {
     setSearchQuery("");
     setSearching(true);
-    fetchData("");
+    fetchData("", Array.from(selectedCategories));
   };
 
   const firstName = user?.firstName || "there";
@@ -520,13 +542,8 @@ export default function HomeScreen() {
     { id: "packer-mover", name: "Packer / Mover Helper" },
   ];
 
-  const filterByCategory = (jobs: Job[]) =>
-    selectedCategories.size === 0
-      ? jobs
-      : jobs.filter(j => selectedCategories.has(j.category_slug ?? ""));
-
-  const filteredCityJobs = filterByCategory(cityJobs);
-  const filteredOtherJobs = filterByCategory(otherJobs);
+  const filteredCityJobs = cityJobs;
+  const filteredOtherJobs = otherJobs;
 
   const activeJobs = nearbyJobs.length;
   const totalResponses = nearbyJobs.reduce(
@@ -883,7 +900,15 @@ export default function HomeScreen() {
               Filter by Category
             </Text>
             {selectedCategories.size > 0 && (
-              <TouchableOpacity onPress={() => setSelectedCategories(new Set())} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCategories(new Set());
+                  setFilterVisible(false);
+                  setLoading(true);
+                  fetchData(searchQuery || undefined, []);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Clear all</Text>
               </TouchableOpacity>
             )}
@@ -934,7 +959,11 @@ export default function HomeScreen() {
           {/* Apply button */}
           <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
             <TouchableOpacity
-              onPress={() => setFilterVisible(false)}
+              onPress={() => {
+                setFilterVisible(false);
+                setLoading(true);
+                fetchData(searchQuery || undefined, Array.from(selectedCategories));
+              }}
               activeOpacity={0.8}
               style={{
                 backgroundColor: "#059669",
