@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSignIn } from "@clerk/clerk-expo";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import KaamSpotLogo from "@/components/KaamSpotLogo";
 import { useGoogleAuth } from "@/lib/oauth";
 import { useTranslation } from "react-i18next";
 
@@ -58,13 +59,8 @@ export default function LoginScreen() {
         <View className="flex-1 justify-center px-6 py-12">
           {/* Logo */}
           <View className="items-center mb-10">
-            <View className="bg-primary w-16 h-16 rounded-2xl items-center justify-center mb-4">
-              <FontAwesome name="briefcase" size={28} color="#FFF" />
-            </View>
-            <Text className="text-h1 text-text-primary font-sans-bold">
-              KaamApp
-            </Text>
-            <Text className="text-body text-text-secondary mt-1">
+            <KaamSpotLogo size="lg" />
+            <Text className="text-body text-text-secondary mt-3">
               Find work. Find workers.
             </Text>
           </View>
@@ -81,7 +77,7 @@ export default function LoginScreen() {
             <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
               {t("auth.email")}
             </Text>
-            <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+            <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
               <FontAwesome name="envelope-o" size={16} color="#6B7280" />
               <TextInput
                 className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans"
@@ -100,7 +96,7 @@ export default function LoginScreen() {
             <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
               {t("auth.password")}
             </Text>
-            <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+            <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
               <FontAwesome name="lock" size={18} color="#6B7280" />
               <TextInput
                 className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans"
@@ -132,7 +128,7 @@ export default function LoginScreen() {
 
           {/* Login button */}
           <TouchableOpacity
-            className="bg-primary rounded-xl py-4 items-center mb-4"
+            className="bg-primary rounded-full py-4 items-center mb-4"
             onPress={handleLogin}
             disabled={loading}
             style={{ opacity: loading ? 0.7 : 1 }}
@@ -157,7 +153,7 @@ export default function LoginScreen() {
 
           {/* Google */}
           <TouchableOpacity
-            className="bg-bg-surface border border-border rounded-xl py-3.5 flex-row items-center justify-center mb-8"
+            className="bg-bg-surface border border-border rounded-full py-3.5 flex-row items-center justify-center mb-8"
             onPress={async () => {
               setGoogleLoading(true);
               setError("");

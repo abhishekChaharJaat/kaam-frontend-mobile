@@ -14,6 +14,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import KaamSpotLogo from "@/components/KaamSpotLogo";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
@@ -543,6 +544,7 @@ export default function HomeScreen() {
               </Text>
             </View>
 
+            <KaamSpotLogo size="sm" onDark />
           </View>
 
           {/* Location Pill */}

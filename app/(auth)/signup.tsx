@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSignUp } from "@clerk/clerk-expo";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import KaamSpotLogo from "@/components/KaamSpotLogo";
 import { useGoogleAuth } from "@/lib/oauth";
 import { useTranslation } from "react-i18next";
 
@@ -74,12 +75,7 @@ export default function SignupScreen() {
       >
         <View className="flex-1 justify-center px-6 py-12">
           <View className="items-center mb-10">
-            <View className="bg-primary w-16 h-16 rounded-2xl items-center justify-center mb-4">
-              <FontAwesome name="briefcase" size={28} color="#FFF" />
-            </View>
-            <Text className="text-h1 text-text-primary font-sans-bold">
-              {t("auth.signup")}
-            </Text>
+            <KaamSpotLogo size="lg" />
             <Text className="text-body text-text-secondary mt-1">
               Join your local work community
             </Text>
@@ -97,7 +93,7 @@ export default function SignupScreen() {
                 <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
                   {t("auth.fullName")}
                 </Text>
-                <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+                <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
                   <FontAwesome name="user-o" size={16} color="#6B7280" />
                   <TextInput
                     className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans"
@@ -113,7 +109,7 @@ export default function SignupScreen() {
                 <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
                   {t("auth.email")}
                 </Text>
-                <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+                <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
                   <FontAwesome name="envelope-o" size={16} color="#6B7280" />
                   <TextInput
                     className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans"
@@ -131,7 +127,7 @@ export default function SignupScreen() {
                 <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
                   {t("auth.password")}
                 </Text>
-                <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+                <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
                   <FontAwesome name="lock" size={18} color="#6B7280" />
                   <TextInput
                     className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans"
@@ -145,7 +141,7 @@ export default function SignupScreen() {
               </View>
 
               <TouchableOpacity
-                className="bg-primary rounded-xl py-4 items-center mb-4"
+                className="bg-primary rounded-full py-4 items-center mb-4"
                 onPress={handleSignup}
                 disabled={loading}
                 style={{ opacity: loading ? 0.7 : 1 }}
@@ -168,7 +164,7 @@ export default function SignupScreen() {
               </View>
 
               <TouchableOpacity
-                className="bg-bg-surface border border-border rounded-xl py-3.5 flex-row items-center justify-center mb-8"
+                className="bg-bg-surface border border-border rounded-full py-3.5 flex-row items-center justify-center mb-8"
                 onPress={async () => {
                   setLoading(true);
                   setError("");
@@ -187,7 +183,7 @@ export default function SignupScreen() {
             </>
           ) : (
             <>
-              <View className="bg-primary-ghost rounded-xl p-4 mb-6">
+              <View className="bg-primary-ghost rounded-full p-4 mb-6">
                 <Text className="text-body text-primary text-center">
                   We sent a verification code to{"\n"}
                   <Text className="font-sans-semibold">{email}</Text>
@@ -198,7 +194,7 @@ export default function SignupScreen() {
                 <Text className="text-body-sm text-text-secondary font-sans-medium mb-1.5">
                   {t("auth.verificationCode")}
                 </Text>
-                <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
+                <View className="flex-row items-center bg-bg-surface border border-border rounded-full px-4">
                   <FontAwesome name="shield" size={16} color="#6B7280" />
                   <TextInput
                     className="flex-1 py-3.5 px-3 text-body text-text-primary font-sans text-center tracking-widest"
@@ -213,7 +209,7 @@ export default function SignupScreen() {
               </View>
 
               <TouchableOpacity
-                className="bg-primary rounded-xl py-4 items-center"
+                className="bg-primary rounded-full py-4 items-center"
                 onPress={handleVerify}
                 disabled={loading}
                 style={{ opacity: loading ? 0.7 : 1 }}
