@@ -5,6 +5,7 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -47,6 +48,27 @@ export default function MyJobs() {
     }
   };
 
+  const handleMarkComplete = (jobId: string, jobTitle: string) => {
+    Alert.alert(
+      t("chat.markCompleteConfirmTitle"),
+      t("chat.markCompleteConfirmMsg"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("chat.markCompleteConfirm"),
+          style: "default",
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              await api(`/jobs/${jobId}/complete`, { method: "POST", token });
+              setJobs((prev) => prev.filter((j) => j.id !== jobId));
+            } catch {}
+          },
+        },
+      ]
+    );
+  };
+
   useEffect(() => {
     fetchJobs(activeTab);
   }, [activeTab]);
@@ -76,14 +98,38 @@ export default function MyJobs() {
           {item.title}
         </Text>
         <Text className={`text-caption font-sans-medium capitalize ${getStatusColor(item.status)}`}>
-          {item.status}
+          {t(`jobs.${item.status}`)}
         </Text>
       </View>
-      <View className="flex-row items-center">
-        <FontAwesome name="comments-o" size={12} color="#94A3B8" />
-        <Text className="text-caption text-text-secondary ml-1">
-          {item.conversation_count} {t("jobs.responses").toLowerCase()}
-        </Text>
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center">
+          <FontAwesome name="comments-o" size={12} color="#94A3B8" />
+          <Text className="text-caption text-text-secondary ml-1">
+            {item.conversation_count} {t("jobs.responses").toLowerCase()}
+          </Text>
+        </View>
+        {item.status === "assigned" && (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleMarkComplete(item.id, item.title);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              backgroundColor: "#D1FAE5",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 8,
+            }}
+          >
+            <FontAwesome name="flag-checkered" size={11} color="#059669" />
+            <Text style={{ fontSize: 12, color: "#059669", fontWeight: "600" }}>
+              {t("chat.markComplete")}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );

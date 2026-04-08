@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 interface AssignedJob {
   id: string;
   title: string;
+  status: string;
   posted_by_name?: string;
   city?: string;
   locality?: string;
@@ -193,7 +194,7 @@ function JobCard({
             >
               <View
                 style={{
-                  backgroundColor: "#D1FAE5",
+                  backgroundColor: job.status === "completed" ? "#F3F4F6" : "#D1FAE5",
                   paddingHorizontal: 10,
                   paddingVertical: 4,
                   borderRadius: 8,
@@ -202,15 +203,19 @@ function JobCard({
                   gap: 4,
                 }}
               >
-                <FontAwesome name="check-circle" size={11} color="#059669" />
+                <FontAwesome
+                  name={job.status === "completed" ? "flag-checkered" : "check-circle"}
+                  size={11}
+                  color={job.status === "completed" ? "#6B7280" : "#059669"}
+                />
                 <Text
                   style={{
                     fontSize: 11,
                     fontFamily: "DMSans_600SemiBold",
-                    color: "#059669",
+                    color: job.status === "completed" ? "#6B7280" : "#059669",
                   }}
                 >
-                  {t("assignedJobs.assigned")}
+                  {job.status === "completed" ? t("jobs.completed") : t("assignedJobs.assigned")}
                 </Text>
               </View>
 
@@ -235,20 +240,24 @@ function JobCard({
   );
 }
 
+const STATUS_TABS = ["assigned", "completed"] as const;
+type StatusTab = typeof STATUS_TABS[number];
+
 export default function AssignedJobsScreen() {
   const [jobs, setJobs] = useState<AssignedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<StatusTab>("assigned");
   const { getToken } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
   const { t } = useTranslation();
   const isDark = colors.bgBase === "#0A0F1A";
 
-  const fetchJobs = useCallback(async () => {
+  const fetchJobs = useCallback(async (status: StatusTab) => {
     try {
       const token = await getToken();
-      const data = await api<AssignedJob[]>("/jobs/assigned-to-me", { token });
+      const data = await api<AssignedJob[]>(`/jobs/assigned-to-me?status=${status}`, { token });
       setJobs(data);
     } catch {
       setJobs([]);
@@ -257,31 +266,17 @@ export default function AssignedJobsScreen() {
 
   useEffect(() => {
     (async () => {
-      await fetchJobs();
+      await fetchJobs(activeTab);
       setLoading(false);
     })();
-  }, []);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchJobs();
+    await fetchJobs(activeTab);
     setRefreshing(false);
-  }, [fetchJobs]);
+  }, [fetchJobs, activeTab]);
 
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colors.bgBase,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#059669" />
-      </View>
-    );
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
@@ -353,10 +348,41 @@ export default function AssignedJobsScreen() {
         </View>
       </View>
 
+      {/* Tabs */}
+      <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingVertical: 12, gap: 8 }}>
+        {STATUS_TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            onPress={() => { if (activeTab !== tab) { setLoading(true); setActiveTab(tab); } }}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 10,
+              backgroundColor: activeTab === tab ? "#059669" : colors.bgSurface,
+              borderWidth: 1,
+              borderColor: activeTab === tab ? "#059669" : colors.border,
+            }}
+          >
+            <Text style={{
+              fontSize: 13,
+              fontFamily: "DMSans_600SemiBold",
+              color: activeTab === tab ? "#FFFFFF" : colors.textSecondary,
+            }}>
+              {t(`jobs.${tab}`)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
+      ) : (
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingTop: 4, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#059669" />
         }
@@ -393,7 +419,7 @@ export default function AssignedJobsScreen() {
                 marginBottom: 6,
               }}
             >
-              {t("assignedJobs.noJobs")}
+              {activeTab === "completed" ? t("assignedJobs.noCompletedJobs") : t("assignedJobs.noJobs")}
             </Text>
             <Text
               style={{
@@ -404,11 +430,12 @@ export default function AssignedJobsScreen() {
                 paddingHorizontal: 40,
               }}
             >
-              {t("assignedJobs.noJobsHint")}
+              {activeTab === "completed" ? t("assignedJobs.noCompletedJobsHint") : t("assignedJobs.noJobsHint")}
             </Text>
           </View>
         }
       />
+      )}
     </View>
   );
 }

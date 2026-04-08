@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useCallback, useState, useEffect } from "react";
 import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
@@ -120,6 +120,19 @@ export default function ProfileScreen() {
   const colors = useThemeColors();
   const isDark = colors.bgBase === "#0A0F1A";
   const [workTitle, setWorkTitle] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const AsyncStorage =
+        require("@react-native-async-storage/async-storage").default;
+      await AsyncStorage.multiRemove(["@user_state", "@app_theme", "@app_language"]);
+      await signOut();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -153,6 +166,21 @@ export default function ProfileScreen() {
   const isEmployer = usagePreference === "find_worker";
 
   return (
+    <View style={{ flex: 1 }}>
+      {loggingOut && (
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999,
+          }}
+        >
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
+      )}
     <ScrollView
       className="flex-1 bg-bg-base"
       contentContainerStyle={{ paddingBottom: 100 }}
@@ -378,7 +406,7 @@ export default function ProfileScreen() {
           <MenuItem
             icon="sign-out"
             title={t("auth.logout")}
-            onPress={async () => await signOut()}
+            onPress={handleLogout}
             danger
           />
         </SectionCard>
@@ -392,5 +420,6 @@ export default function ProfileScreen() {
         v1.0.0
       </Text>
     </ScrollView>
+    </View>
   );
 }

@@ -43,6 +43,7 @@ interface ConversationInfo {
   responder_name?: string;
   is_assigned: boolean;
   is_disabled: boolean;
+  job_status?: string;
 }
 
 interface MeResponse {
@@ -121,6 +122,8 @@ export default function ChatRoom() {
   const isEmployer = usagePreference === "find_worker";
   const [nudging, setNudging] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [jobCompleted, setJobCompleted] = useState(false);
   const wsRef = useRef<ChatWebSocket | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const myMongoIdRef = useRef<string | null>(null);
@@ -154,6 +157,7 @@ export default function ChatRoom() {
         setMessages(messagesData);
         setMyMongoId(meData.id);
         myMongoIdRef.current = meData.id;
+        if (convData.job_status === "completed") setJobCompleted(true);
 
         ws = new ChatWebSocket(chatId ?? "", token, (msg) => {
           if (msg.error) return;
@@ -282,6 +286,34 @@ export default function ChatRoom() {
       ]
     );
   }, [conv, getToken, getOtherName, showToast, t]);
+
+  const handleComplete = useCallback(() => {
+    if (!conv) return;
+    Alert.alert(
+      t("chat.markCompleteConfirmTitle"),
+      t("chat.markCompleteConfirmMsg"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("chat.markCompleteConfirm"),
+          style: "default",
+          onPress: async () => {
+            setCompleting(true);
+            try {
+              const token = await getToken();
+              await api(`/jobs/${conv.job_id}/complete`, { method: "POST", token });
+              setJobCompleted(true);
+              showToast(t("chat.jobCompleted"), "success");
+            } catch {
+              showToast(t("common.error"), "error");
+            } finally {
+              setCompleting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [conv, getToken, showToast, t]);
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isSystem = item.message_type === "system";
@@ -466,7 +498,26 @@ export default function ChatRoom() {
         </View>
       )}
 
-      {conv?.is_assigned && !isEmployer && (
+      {jobCompleted && (
+        <View
+          style={{
+            backgroundColor: "#D1FAE5",
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          <FontAwesome name="check-circle" size={16} color="#059669" />
+          <Text style={{ fontSize: 14, color: "#059669", fontWeight: "700" }}>
+            {t("chat.jobCompletedBanner")}
+          </Text>
+        </View>
+      )}
+
+      {conv?.is_assigned && !isEmployer && !jobCompleted && (
         <View
           style={{
             backgroundColor: "#D1FAE5",
@@ -485,7 +536,7 @@ export default function ChatRoom() {
         </View>
       )}
 
-      {conv?.is_assigned && isEmployer && (
+      {conv?.is_assigned && isEmployer && !jobCompleted && (
         <View
           style={{
             backgroundColor: "#DBEAFE",
@@ -520,6 +571,7 @@ export default function ChatRoom() {
         />
       )}
 
+      {/* Pre-assignment actions: Assign (employer) or Nudge (worker) */}
       {!conv?.is_disabled && !conv?.is_assigned && conv && (
         <View
           style={{
@@ -589,7 +641,45 @@ export default function ChatRoom() {
         </View>
       )}
 
-      {!conv?.is_disabled && (
+      {/* Post-assignment: employer can mark job as complete */}
+      {conv?.is_assigned && isEmployer && !jobCompleted && (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.bgSurface,
+          }}
+        >
+          <TouchableOpacity
+            onPress={handleComplete}
+            disabled={completing}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              backgroundColor: "#059669",
+              paddingVertical: 12,
+              borderRadius: 12,
+              opacity: completing ? 0.6 : 1,
+            }}
+          >
+            {completing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <FontAwesome name="flag-checkered" size={16} color="#FFFFFF" />
+            )}
+            <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>
+              {t("chat.markComplete")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {!conv?.is_disabled && !jobCompleted && (
         <View className="flex-row items-end px-4 border-t border-border bg-bg-base"
           style={{ paddingTop: 12, paddingBottom: 12 + insets.bottom }}>
           <TextInput

@@ -144,7 +144,13 @@
     "jobAssignedToYou": "यह काम आपको दिया गया है",
     "jobAssignedSuccess": "आपने यह काम इस कारीगर को दिया है",
     "jobAssignedTo": "काम {{name}} को दिया गया।",
-    "jobClosedWithOther": "यह काम किसी और को दे दिया गया है"
+    "jobClosedWithOther": "यह काम किसी और को दे दिया गया है",
+    "markComplete": "काम पूरा हो गया",
+    "markCompleteConfirmTitle": "काम पूरा करें",
+    "markCompleteConfirmMsg": "क्या काम हो गया? इससे काम पूरा हो जाएगा और चैट बंद हो जाएगी।",
+    "markCompleteConfirm": "हाँ, पूरा करें",
+    "jobCompleted": "काम पूरा हो गया!",
+    "jobCompletedBanner": "काम सफलतापूर्वक पूरा हुआ"
   },
   "notifications": {
     "title": "सूचनाएं",
@@ -260,7 +266,9 @@
     "profileSubtitle": "आपको दिए गए काम देखें",
     "assigned": "दिया गया",
     "noJobs": "अभी कोई काम नहीं दिया गया",
-    "noJobsHint": "जब कोई नियोक्ता आपको काम देगा, तो वह यहाँ दिखाई देगा"
+    "noJobsHint": "जब कोई नियोक्ता आपको काम देगा, तो वह यहाँ दिखाई देगा",
+    "noCompletedJobs": "अभी कोई पूरा हुआ काम नहीं",
+    "noCompletedJobsHint": "नियोक्ता द्वारा पूरा किया गया काम यहाँ दिखाई देगा"
   },
   "terms": {
     "title": "शर्तें और गोपनीयता",

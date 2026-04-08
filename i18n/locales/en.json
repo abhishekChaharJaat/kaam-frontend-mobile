@@ -144,7 +144,13 @@
     "jobAssignedToYou": "This job is assigned to you",
     "jobAssignedSuccess": "You assigned this job to this worker",
     "jobAssignedTo": "Job assigned to {{name}}.",
-    "jobClosedWithOther": "This job has been assigned to someone else"
+    "jobClosedWithOther": "This job has been assigned to someone else",
+    "markComplete": "Mark Job as Complete",
+    "markCompleteConfirmTitle": "Mark Job Complete",
+    "markCompleteConfirmMsg": "Has the work been done? This will mark the job as complete and close the chat.",
+    "markCompleteConfirm": "Yes, Mark Complete",
+    "jobCompleted": "Job marked as complete!",
+    "jobCompletedBanner": "Job completed successfully"
   },
   "notifications": {
     "title": "Notifications",
@@ -260,7 +266,9 @@
     "profileSubtitle": "View jobs you've been assigned",
     "assigned": "Assigned",
     "noJobs": "No assigned jobs yet",
-    "noJobsHint": "When an employer assigns a job to you, it will appear here"
+    "noJobsHint": "When an employer assigns a job to you, it will appear here",
+    "noCompletedJobs": "No completed jobs yet",
+    "noCompletedJobsHint": "Jobs marked as complete by the employer will appear here"
   },
   "terms": {
     "title": "Terms & Privacy",

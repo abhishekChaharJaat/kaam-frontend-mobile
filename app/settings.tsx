@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -177,7 +178,20 @@ export default function SettingsScreen() {
   const colors = useThemeColors();
   const { usagePreference } = useUserStore();
   const [language, setLanguage] = useState(i18n.language);
+  const [loggingOut, setLoggingOut] = useState(false);
   const isDark = colors.bgBase === "#0A0F1A";
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const AsyncStorage =
+        require("@react-native-async-storage/async-storage").default;
+      await AsyncStorage.multiRemove(["@user_state", "@app_theme", "@app_language"]);
+      await signOut();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   const toggleLanguage = async () => {
     const newLang = language === "en" ? "hi" : "en";
@@ -209,6 +223,20 @@ export default function SettingsScreen() {
 
   return (
     <View className="flex-1 bg-bg-base">
+      {loggingOut && (
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999,
+          }}
+        >
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
+      )}
       {/* Header */}
       <View
         style={{
@@ -393,9 +421,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon="sign-out"
             title={t("auth.logout")}
-            onPress={async () => {
-              await signOut();
-            }}
+            onPress={handleLogout}
             iconBg="rgba(245,158,11,0.08)"
             iconColor="#F59E0B"
             textColor={colors.textPrimary}
