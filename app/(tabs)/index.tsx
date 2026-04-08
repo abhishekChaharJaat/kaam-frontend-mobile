@@ -37,6 +37,22 @@ interface Job {
   category_id?: string;
   category_name?: string;
   category_slug?: string;
+  location?: { type: string; coordinates: [number, number] };
+}
+
+/** Haversine distance in km between two lat/lng points */
+function getDistanceKm(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number,
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const URGENCY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
@@ -385,9 +401,13 @@ function HomeSkeleton({ isDark }: { isDark: boolean }) {
 
 export default function HomeScreen() {
   const { t } = useTranslation();
+  const [rangeJobs, setRangeJobs] = useState<Job[]>([]);
   const [cityJobs, setCityJobs] = useState<Job[]>([]);
   const [otherJobs, setOtherJobs] = useState<Job[]>([]);
   const [nearbyJobs, setNearbyJobs] = useState<Job[]>([]);
+  const [workRangeKm, setWorkRangeKm] = useState<number | null>(null);
+  const [savedUserCoords, setSavedUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [savedUserCity, setSavedUserCity] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [categoryIdToSlug, setCategoryIdToSlug] = useState<Record<string, string>>({});
   const [filterVisible, setFilterVisible] = useState(false);
@@ -425,18 +445,33 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
-  // Build category ID → slug map for reliable client-side filtering
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = await getToken();
-        const cats = await api<{ id: string; slug: string }[]>("/categories", { token });
-        const map: Record<string, string> = {};
-        for (const c of cats) map[c.id] = c.slug;
-        setCategoryIdToSlug(map);
-      } catch {}
-    })();
+  // Fetch categories, work range, saved location — re-fetch on every focus
+  const fetchUserAndCategories = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const [cats, me] = await Promise.all([
+        api<{ id: string; slug: string }[]>("/categories", { token }),
+        api<{ work_range_km?: number; location?: { coordinates: [number, number] }; city?: string }>("/auth/me", { token }),
+      ]);
+      const map: Record<string, string> = {};
+      for (const c of cats) map[c.id] = c.slug;
+      setCategoryIdToSlug(map);
+      if (me.work_range_km != null) setWorkRangeKm(me.work_range_km);
+      if (me.location?.coordinates) {
+        setSavedUserCoords({
+          longitude: me.location.coordinates[0],
+          latitude: me.location.coordinates[1],
+        });
+      }
+      if (me.city) setSavedUserCity(me.city);
+    } catch {}
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserAndCategories();
+    }, [fetchUserAndCategories])
+  );
 
   const syncUser = async (token: string | null) => {
     if (!token) return;
@@ -465,23 +500,53 @@ export default function HomeScreen() {
       const jobs = await api<Job[]>(endpoint, { token });
       setNearbyJobs(jobs);
       if (usagePreference !== "find_worker") {
-        // Always filter client-side using the category ID→slug map (reliable, doesn't need $lookup)
+        // Filter by category
         const activeCategories = categorySlugs && categorySlugs.length > 0 ? new Set(categorySlugs) : null;
         const matchesCategory = (j: Job) => {
           if (!activeCategories) return true;
           const slug = j.category_slug ?? categoryIdToSlug[j.category_id ?? ""] ?? "";
           return activeCategories.has(slug);
         };
-        const userCity = location?.city?.toLowerCase().trim();
         const allMatching = jobs.filter(matchesCategory);
-        const near = userCity
-          ? allMatching.filter(j => j.city?.toLowerCase().trim() === userCity)
-          : allMatching;
-        const other = userCity
-          ? allMatching.filter(j => j.city?.toLowerCase().trim() !== userCity)
-          : [];
-        setCityJobs(near);
-        setOtherJobs(other);
+
+        // Split into 3 categories using saved coordinates from backend
+        const userLat = savedUserCoords?.latitude;
+        const userLng = savedUserCoords?.longitude;
+        const hasUserCoords = userLat != null && userLng != null && (userLat !== 0 || userLng !== 0);
+        const userCity = (savedUserCity || location?.city)?.toLowerCase().trim();
+        const range = workRangeKm;
+
+        const inRange: Job[] = [];
+        const inCity: Job[] = [];
+        const inOther: Job[] = [];
+
+        for (const j of allMatching) {
+          const jobLng = j.location?.coordinates?.[0];
+          const jobLat = j.location?.coordinates?.[1];
+          const hasJobCoords = jobLat != null && jobLng != null && (jobLat !== 0 || jobLng !== 0);
+          const jobCity = j.city?.toLowerCase().trim();
+
+          // 1. Check distance: worker coords vs job coords
+          if (hasUserCoords && hasJobCoords && range != null && range > 0) {
+            const dist = getDistanceKm(userLat, userLng, jobLat, jobLng);
+            if (dist <= range) {
+              inRange.push(j);
+              continue;
+            }
+          }
+
+          // 2. Outside range — check if same city
+          if (userCity && jobCity === userCity) {
+            inCity.push(j);
+          } else {
+            // 3. Different city → others
+            inOther.push(j);
+          }
+        }
+
+        setRangeJobs(inRange);
+        setCityJobs(inCity);
+        setOtherJobs(inOther);
       }
     } catch {
     } finally {
@@ -494,7 +559,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [usagePreference])
+    }, [usagePreference, savedUserCoords, savedUserCity, workRangeKm])
   );
 
   const handleSearch = (text: string) => {
@@ -541,9 +606,6 @@ export default function HomeScreen() {
     { id: "interior", name: "Interior Work" },
     { id: "packer-mover", name: "Packer / Mover Helper" },
   ];
-
-  const filteredCityJobs = cityJobs;
-  const filteredOtherJobs = otherJobs;
 
   const activeJobs = nearbyJobs.length;
   const totalResponses = nearbyJobs.reduce(
@@ -984,38 +1046,71 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: 20 }}>
         {isEmployer || nearbyJobs.length === 0 ? null : (
           <>
-            {/* City jobs */}
-            {location?.city ? (
-              <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary, marginBottom: 10 }}>
-                📍 {location.city}
-              </Text>
-            ) : null}
-
-            {filteredCityJobs.length === 0 && filteredOtherJobs.length === 0 ? (
+            {rangeJobs.length === 0 && cityJobs.length === 0 && otherJobs.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 32 }}>
                 <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: colors.textTertiary }}>
-                  No jobs found for selected categories
+                  {t("home.noJobsForCategory")}
                 </Text>
                 <TouchableOpacity onPress={() => setSelectedCategories(new Set())} style={{ marginTop: 10 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Clear filters</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>{t("home.clearFilters")}</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
 
-            {filteredCityJobs.map((job, idx) => (
-              <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
-            ))}
+            {/* 1. Jobs Near You (within work range) */}
+            {rangeJobs.length > 0 && (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+                  <FontAwesome name="map-pin" size={12} color="#059669" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#059669" }}>
+                    {t("home.jobsInYourRange")}
+                  </Text>
+                </View>
+                {rangeJobs.map((job, idx) => (
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                ))}
+              </>
+            )}
 
-            {filteredOtherJobs.length > 0 && (
+            {/* 2. Jobs in Your City */}
+            {cityJobs.length > 0 && (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: rangeJobs.length > 0 ? 20 : 0, marginBottom: 12 }}>
+                  {rangeJobs.length > 0 && (
+                    <>
+                      <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
+                      <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: colors.textTertiary, marginHorizontal: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {t("home.jobsInYourCity")}
+                      </Text>
+                      <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
+                    </>
+                  )}
+                  {rangeJobs.length === 0 && (
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <FontAwesome name="building-o" size={12} color="#3B82F6" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#3B82F6" }}>
+                        {t("home.jobsInYourCity")}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {cityJobs.map((job, idx) => (
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                ))}
+              </>
+            )}
+
+            {/* 3. Jobs in Other Cities */}
+            {otherJobs.length > 0 && (
               <>
                 <View style={{ flexDirection: "row", alignItems: "center", marginTop: 20, marginBottom: 12 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
                   <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: colors.textTertiary, marginHorizontal: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Other Cities
+                    {t("home.otherCities")}
                   </Text>
                   <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
                 </View>
-                {filteredOtherJobs.map((job, idx) => (
+                {otherJobs.map((job, idx) => (
                   <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
                 ))}
               </>
@@ -1097,7 +1192,6 @@ export default function HomeScreen() {
               colors={colors}
               isDark={isDark}
               t={t}
-              isEmployer={isEmployer}
             />
           ))
         ) : null}

@@ -120,7 +120,7 @@ export default function ChatRoom() {
   const { usagePreference } = useUserStore();
   const { showToast } = useToast();
   const isEmployer = usagePreference === "find_worker";
-  const [nudging, setNudging] = useState(false);
+  const isDark = colors.bgBase === "#0A0F1A";
   const [assigning, setAssigning] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [jobCompleted, setJobCompleted] = useState(false);
@@ -192,9 +192,8 @@ export default function ChatRoom() {
     };
   }, [chatId]);
 
-  const handleSend = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text || conv?.is_disabled || sending) return;
+  const sendText = useCallback(async (text: string) => {
+    if (!text.trim() || conv?.is_disabled || sending) return;
 
     setInputText("");
     setSending(true);
@@ -204,7 +203,7 @@ export default function ChatRoom() {
       conversation_id: chatId ?? "",
       sender_user_id: myMongoId || "",
       message_type: "text",
-      text,
+      text: text.trim(),
       is_read: false,
       created_at: new Date().toISOString(),
     };
@@ -213,7 +212,7 @@ export default function ChatRoom() {
     try {
       const token = await getToken();
       const saved = await api<Message>(
-        `/conversations/${chatId}/messages?text=${encodeURIComponent(text)}`,
+        `/conversations/${chatId}/messages?text=${encodeURIComponent(text.trim())}`,
         { method: "POST", token }
       );
       setMessages((prev) =>
@@ -224,7 +223,11 @@ export default function ChatRoom() {
     } finally {
       setSending(false);
     }
-  }, [inputText, conv, sending, myMongoId, chatId, getToken]);
+  }, [conv, sending, myMongoId, chatId, getToken]);
+
+  const handleSend = useCallback(() => {
+    sendText(inputText);
+  }, [inputText, sendText]);
 
   const getOtherName = useCallback(() => {
     if (!conv) return t("chat.chat");
@@ -233,27 +236,6 @@ export default function ChatRoom() {
     }
     return conv.poster_name || t("chat.user");
   }, [conv, myMongoId, t]);
-
-  const handleNudge = useCallback(async () => {
-    if (!conv || nudging) return;
-    setNudging(true);
-    try {
-      const token = await getToken();
-      const msg = await api<Message>(
-        `/conversations/${chatId}/nudge`,
-        { method: "POST", token }
-      );
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-      showToast(t("chat.nudgeSent"), "success");
-    } catch {
-      showToast(t("common.error"), "error");
-    } finally {
-      setNudging(false);
-    }
-  }, [conv, nudging, chatId, getToken, showToast, t]);
 
   const handleAssign = useCallback(() => {
     if (!conv) return;
@@ -571,73 +553,85 @@ export default function ChatRoom() {
         />
       )}
 
-      {/* Pre-assignment actions: Assign (employer) or Nudge (worker) */}
-      {!conv?.is_disabled && !conv?.is_assigned && conv && (
+      {/* Assign button (employer) */}
+      {!conv?.is_disabled && !conv?.is_assigned && conv && isEmployer && (
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
             paddingHorizontal: 16,
             paddingTop: 8,
             paddingBottom: 8,
             borderTopWidth: 1,
             borderTopColor: colors.border,
             backgroundColor: colors.bgSurface,
-            gap: 12,
           }}
         >
-          {isEmployer ? (
-            <TouchableOpacity
-              onPress={handleAssign}
-              disabled={assigning}
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                backgroundColor: "#059669",
-                paddingVertical: 10,
-                borderRadius: 10,
-                opacity: assigning ? 0.6 : 1,
-              }}
-            >
-              {assigning ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <FontAwesome name="check-circle" size={16} color="#FFFFFF" />
-              )}
-              <Text style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 14 }}>
-                {t("chat.closeWithWorker")}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={handleNudge}
-              disabled={nudging}
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                backgroundColor: "#F59E0B",
-                paddingVertical: 10,
-                borderRadius: 10,
-                opacity: nudging ? 0.6 : 1,
-              }}
-            >
-              {nudging ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <FontAwesome name="hand-pointer-o" size={16} color="#FFFFFF" />
-              )}
-              <Text style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 14 }}>
-                {t("chat.sendNudge")}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={handleAssign}
+            disabled={assigning}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              backgroundColor: "#059669",
+              paddingVertical: 10,
+              borderRadius: 10,
+              opacity: assigning ? 0.6 : 1,
+            }}
+          >
+            {assigning ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <FontAwesome name="check-circle" size={16} color="#FFFFFF" />
+            )}
+            <Text style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 14 }}>
+              {t("chat.closeWithWorker")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Quick message templates (worker, only when no messages sent yet) */}
+      {!conv?.is_disabled && !conv?.is_assigned && conv && !isEmployer &&
+        !messages.some((m) => m.sender_user_id === myMongoId && m.message_type === "text") && (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.bgSurface,
+          }}
+        >
+          <Text style={{ fontSize: 11, fontFamily: "DMSans_500Medium", color: colors.textTertiary, marginBottom: 6 }}>
+            {t("chat.quickReplies")}
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {[
+              `Hi, I'm interested in "${conv.job_title || t("chat.thisJob")}". When do you need this done?`,
+              `Hello! I can do this work. Let's discuss the details for "${conv.job_title || t("chat.thisJob")}".`,
+            ].map((template, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => sendText(template)}
+                activeOpacity={0.7}
+                style={{
+                  backgroundColor: isDark ? "rgba(5,150,105,0.15)" : "#ECFDF5",
+                  borderWidth: 1,
+                  borderColor: isDark ? "rgba(5,150,105,0.3)" : "#A7F3D0",
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  flexShrink: 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, color: "#059669", lineHeight: 18 }} numberOfLines={2}>
+                  {template}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       )}
 

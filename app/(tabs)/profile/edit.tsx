@@ -11,6 +11,7 @@ import {
   Platform,
   Switch,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useThemeColors } from "@/lib/useThemeColors";
@@ -29,6 +30,7 @@ interface UserProfile {
   usage_preference?: string;
   work_title?: string;
   bio?: string;
+  work_range_km?: number;
 }
 
 function FormField({
@@ -85,7 +87,21 @@ export default function EditProfileScreen() {
   const [headline, setHeadline] = useState("");
   const [bio, setBio] = useState("");
   const [isAvailable, setIsAvailable] = useState(true);
+  const [workRange, setWorkRange] = useState<number | null>(null);
+  const [workRangeVisible, setWorkRangeVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const WORK_RANGE_OPTIONS = [
+    { label: "Under 1 km", value: 1 },
+    { label: "Under 2 km", value: 2 },
+    { label: "2–5 km", value: 5 },
+    { label: "5–10 km", value: 10 },
+    { label: "10–20 km", value: 20 },
+    { label: "20+ km", value: 50 },
+    { label: t("settings.inMyCity"), value: 0 },
+  ];
+
+  const workRangeLabel = WORK_RANGE_OPTIONS.find((o) => o.value === workRange)?.label || t("settings.notSet");
 
   useEffect(() => {
     (async () => {
@@ -98,10 +114,11 @@ export default function EditProfileScreen() {
         setLocality(me.locality || location?.locality || "");
         setHeadline(me.work_title || "");
         setBio(me.bio || "");
+        if (me.work_range_km != null) setWorkRange(me.work_range_km);
       } catch {}
       setLoading(false);
     })();
-  }, [getToken, location]);
+  }, []);
 
   const onSave = async () => {
     if (!fullName.trim()) return;
@@ -119,6 +136,7 @@ export default function EditProfileScreen() {
           ...(usagePreference === "find_work" && {
             work_title: headline.trim() || null,
             bio: bio.trim() || null,
+            ...(workRange != null && { work_range_km: workRange }),
           }),
         },
       });
@@ -403,6 +421,39 @@ export default function EditProfileScreen() {
                 />
               </FormField>
 
+              {/* Work Range */}
+              <TouchableOpacity
+                onPress={() => setWorkRangeVisible(true)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: colors.bgBase,
+                  borderRadius: 14,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  marginBottom: 14,
+                  borderWidth: 1.5,
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.06)",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <FontAwesome name="road" size={16} color="#8B5CF6" />
+                  <Text style={{ fontSize: 15, fontFamily: "DMSans_500Medium", color: colors.textPrimary }}>
+                    {t("settings.workRange")}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 14, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>
+                    {workRangeLabel}
+                  </Text>
+                  <FontAwesome name="chevron-right" size={11} color={colors.textTertiary} />
+                </View>
+              </TouchableOpacity>
+
               <View
                 style={{
                   flexDirection: "row",
@@ -489,6 +540,65 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Work Range Picker Modal */}
+      <Modal
+        visible={workRangeVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWorkRangeVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          activeOpacity={1}
+          onPress={() => setWorkRangeVisible(false)}
+        />
+        <View style={{
+          backgroundColor: isDark ? "#111827" : "#FFFFFF",
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingBottom: 32,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}>
+          <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)" }} />
+          </View>
+          <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary, paddingHorizontal: 20, paddingVertical: 14 }}>
+            {t("settings.workRange")}
+          </Text>
+          {WORK_RANGE_OPTIONS.map((opt, i) => {
+            const isSelected = workRange === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => { setWorkRange(opt.value); setWorkRangeVisible(false); }}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderBottomWidth: i < WORK_RANGE_OPTIONS.length - 1 ? 1 : 0,
+                  borderBottomColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                }}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontFamily: isSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                  color: isSelected ? "#059669" : colors.textPrimary,
+                }}>
+                  {opt.label}
+                </Text>
+                {isSelected && <FontAwesome name="check" size={14} color="#059669" />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

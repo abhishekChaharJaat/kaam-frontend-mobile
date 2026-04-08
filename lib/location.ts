@@ -9,6 +9,13 @@ export interface LocationResult {
   country?: string;
 }
 
+export async function checkLocationPermission(): Promise<"granted" | "denied" | "blocked"> {
+  const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+  if (status === "granted") return "granted";
+  if (!canAskAgain) return "blocked";
+  return "denied";
+}
+
 export async function getCurrentLocation(): Promise<LocationResult | null> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== "granted") return null;
@@ -29,9 +36,12 @@ export async function getCurrentLocation(): Promise<LocationResult | null> {
     });
 
     if (address) {
-      result.city = address.city || undefined;
+      const city = address.city || address.subregion || address.district || undefined;
+      result.city = city;
       result.state = address.region || undefined;
-      result.locality = address.district || address.subregion || undefined;
+      // Use the most specific area name available, but skip if it's same as city
+      const area = address.name || address.street || address.district || address.subregion || undefined;
+      result.locality = area && area.toLowerCase() !== city?.toLowerCase() ? area : undefined;
       result.country = address.country || undefined;
     }
   } catch {}
@@ -49,10 +59,12 @@ export async function reverseGeocode(
       longitude,
     });
 
+    const city = address?.city || address?.subregion || address?.district || undefined;
+    const area = address?.name || address?.street || address?.district || address?.subregion || undefined;
     return {
-      city: address?.city || undefined,
+      city,
       state: address?.region || undefined,
-      locality: address?.district || address?.subregion || undefined,
+      locality: area && area.toLowerCase() !== city?.toLowerCase() ? area : undefined,
       country: address?.country || undefined,
     };
   } catch {

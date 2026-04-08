@@ -37,6 +37,7 @@ interface JobDetail {
   address_line?: string;
   latitude?: number;
   longitude?: number;
+  location?: { type: string; coordinates: [number, number] };
   posted_by_user_id: string;
   posted_by_clerk_id?: string;
   posted_by_name?: string;
@@ -172,6 +173,15 @@ function InfoChip({
       </Text>
     </View>
   );
+}
+
+function formatDDMMYY(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 }
 
 function formatTimeAgo(dateStr: string): string {
@@ -476,7 +486,7 @@ export default function JobDetailScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
                       <FontAwesome name="calendar-o" size={12} color="#3B82F6" />
                       <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#3B82F6" }}>
-                        {job.required_date ?? urgency.label}
+                        {job.required_date ? formatDDMMYY(job.required_date) : urgency.label}
                       </Text>
                     </View>
                   </View>
@@ -489,6 +499,17 @@ export default function JobDetailScreen() {
                       <Text style={{ fontSize: 14, fontFamily: "DMSans_700Bold", color: "#059669" }}>{formatBudget()}</Text>
                     </View>
                   </View>
+
+                  {/* Location — pill */}
+                  {location ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 }}>
+                      <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{t("jobs.location")}:</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.06)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+                        <FontAwesome name="map-marker" size={12} color="#EF4444" />
+                        <Text style={{ fontSize: 14, fontFamily: "DMSans_600SemiBold", color: "#EF4444" }}>{location}</Text>
+                      </View>
+                    </View>
+                  ) : null}
                 </>
               ) : (
                 /* ══ EMPLOYER / DEFAULT VIEW ══ */
@@ -537,8 +558,8 @@ export default function JobDetailScreen() {
                 </>
               )}
 
-              {/* ── Schedule ── */}
-              {(job.required_date || job.required_time_slot) && (
+              {/* ── Schedule (employer only) ── */}
+              {!isWorker && (job.required_date || job.required_time_slot) && (
                 <>
                   <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
                   <SectionHeader title={t("jobs.schedule")} />
@@ -577,12 +598,18 @@ export default function JobDetailScreen() {
                 </>
               ) : null}
 
-              {/* ── Location Map (OpenStreetMap + Nominatim geocoding) ── */}
-              {(job.city || job.locality) ? (() => {
+              {/* ── Location Map (always show if any location info exists) ── */}
+              {(job.city || job.locality || (job.location?.coordinates && (job.location.coordinates[0] !== 0 || job.location.coordinates[1] !== 0))) ? (() => {
                 const locationLabel = [job.address_line, job.locality, job.city].filter(Boolean).join(", ");
                 const searchQuery = [job.locality, job.city].filter(Boolean).join(", ");
+                // Extract coordinates: prefer location GeoJSON, fall back to lat/lng fields
+                const geoLng = job.location?.coordinates?.[0];
+                const geoLat = job.location?.coordinates?.[1];
+                const mapLat = (geoLat && geoLat !== 0) ? geoLat : job.latitude;
+                const mapLng = (geoLng && geoLng !== 0) ? geoLng : job.longitude;
+                const hasCoords = mapLat != null && mapLng != null && (mapLat !== 0 || mapLng !== 0);
 
-                const mapHtml = job.latitude && job.longitude
+                const mapHtml = hasCoords
                   ? `
 <!DOCTYPE html><html>
 <head>
@@ -595,10 +622,10 @@ export default function JobDetailScreen() {
   <div id="map"></div>
   <script>
     var map = L.map('map',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,attributionControl:false})
-      .setView([${job.latitude},${job.longitude}],15);
+      .setView([${mapLat},${mapLng}],14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     var icon = L.divIcon({className:'',html:'<div style="width:32px;height:32px;background:#059669;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)"></div>',iconSize:[32,32],iconAnchor:[16,32]});
-    L.marker([${job.latitude},${job.longitude}],{icon}).addTo(map);
+    L.marker([${mapLat},${mapLng}],{icon}).addTo(map);
   </script>
 </body></html>`
                   : `
@@ -620,13 +647,13 @@ export default function JobDetailScreen() {
       .then(data=>{
         if(data && data[0]){
           var lat=parseFloat(data[0].lat), lng=parseFloat(data[0].lon);
-          map.setView([lat,lng],13);
+          map.setView([lat,lng],14);
           L.marker([lat,lng],{icon}).addTo(map);
         } else {
-          map.setView([20.5937,78.9629],5);
+          map.setView([20.5937,78.9629],12);
         }
       })
-      .catch(()=>{ map.setView([20.5937,78.9629],5); });
+      .catch(()=>{ map.setView([20.5937,78.9629],12); });
   </script>
 </body></html>`;
 

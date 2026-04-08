@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Alert,
+  Linking,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -13,9 +15,71 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useThemeStore } from "@/store/theme";
 import { useUserStore } from "@/store/user";
 import { api } from "@/lib/api";
+import { getCurrentLocation, checkLocationPermission, reverseGeocode } from "@/lib/location";
+import MapView from "react-native-maps";
+import { Platform } from "react-native";
 import i18n from "@/i18n";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
+
+interface CenterCoords {
+  latitude: number;
+  longitude: number;
+}
+
+const SettingsLocationMap = memo(function SettingsLocationMap({
+  initialCoords,
+  onCenterChanged,
+}: {
+  initialCoords: CenterCoords;
+  onCenterChanged: (coords: CenterCoords) => void;
+}) {
+  const mapRef = useRef<MapView>(null);
+  const userTouched = useRef(false);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <MapView
+        ref={mapRef}
+        style={{ flex: 1 }}
+        initialRegion={{
+          latitude: initialCoords.latitude,
+          longitude: initialCoords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+        onPanDrag={() => { userTouched.current = true; }}
+        onRegionChangeComplete={(region) => {
+          if (!userTouched.current) return;
+          userTouched.current = false;
+          onCenterChanged({ latitude: region.latitude, longitude: region.longitude });
+        }}
+        showsUserLocation
+        showsMyLocationButton={false}
+      />
+      {/* Fixed center pin */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <FontAwesome
+          name="map-marker"
+          size={44}
+          color="#059669"
+          style={{ marginBottom: 44 }}
+        />
+      </View>
+    </View>
+  );
+});
 
 const LANG_STORAGE_KEY = "@app_language";
 
@@ -176,10 +240,47 @@ export default function SettingsScreen() {
   const { signOut, getToken } = useAuth();
   const { theme, toggleTheme } = useThemeStore();
   const colors = useThemeColors();
-  const { usagePreference } = useUserStore();
+  const { usagePreference, location, setLocation } = useUserStore();
   const [language, setLanguage] = useState(i18n.language);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [workRangeVisible, setWorkRangeVisible] = useState(false);
+  const [workRange, setWorkRange] = useState<number | null>(null);
+  const [savingRange, setSavingRange] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapLabel, setMapLabel] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
   const isDark = colors.bgBase === "#0A0F1A";
+  const isWorker = usagePreference === "find_work";
+
+  const WORK_RANGE_OPTIONS = [
+    { label: "Under 1 km", value: 1 },
+    { label: "Under 2 km", value: 2 },
+    { label: "2–5 km", value: 5 },
+    { label: "5–10 km", value: 10 },
+    { label: "10–20 km", value: 20 },
+    { label: "20+ km", value: 50 },
+    { label: t("settings.inMyCity"), value: 0 },
+  ];
+
+  // Load current work range from backend
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const me = await api<{ work_range_km?: number }>("/auth/me", { token });
+        if (me.work_range_km != null) setWorkRange(me.work_range_km);
+      } catch {}
+    })();
+  }, []);
+
+  const workRangeLabel = WORK_RANGE_OPTIONS.find((o) => o.value === workRange)?.label || t("settings.notSet");
+
+  const locationLabel = location?.locality
+    ? `${location.locality}, ${location.city || ""}`
+    : location?.city || t("settings.notSet");
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -219,6 +320,116 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleUpdateLocation = async () => {
+    setUpdatingLocation(true);
+    try {
+      const permStatus = await checkLocationPermission();
+      if (permStatus === "blocked") {
+        Linking.openSettings();
+        setUpdatingLocation(false);
+        return;
+      }
+      const loc = await getCurrentLocation();
+      if (!loc) {
+        setUpdatingLocation(false);
+        return;
+      }
+      // Open map with current GPS position
+      mapCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude };
+      setMapCoords({ latitude: loc.latitude, longitude: loc.longitude });
+      setMapLabel(
+        loc.locality
+          ? `${loc.locality}, ${loc.city || ""}`
+          : loc.city || t("onboarding.locationDetected")
+      );
+      setMapVisible(true);
+    } catch {
+      Alert.alert(t("common.error"), t("settings.locationUpdateFailed"));
+    } finally {
+      setUpdatingLocation(false);
+    }
+  };
+
+  const geocodeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
+
+  const onMapCenterChanged = useCallback((newCoords: CenterCoords) => {
+    mapCoordsRef.current = newCoords;
+
+    if (geocodeTimeout.current) clearTimeout(geocodeTimeout.current);
+    geocodeTimeout.current = setTimeout(async () => {
+      setGeocoding(true);
+      try {
+        const geo = await reverseGeocode(newCoords.latitude, newCoords.longitude);
+        setMapLabel(
+          geo.locality
+            ? `${geo.locality}, ${geo.city || ""}`
+            : geo.city || t("onboarding.locationDetected")
+        );
+      } catch {
+      } finally {
+        setGeocoding(false);
+      }
+    }, 500);
+  }, [t]);
+
+  const handleConfirmMapLocation = async () => {
+    const c = mapCoordsRef.current;
+    if (!c) return;
+    setSavingLocation(true);
+    try {
+      const geo = await reverseGeocode(c.latitude, c.longitude);
+      setLocation({
+        latitude: c.latitude,
+        longitude: c.longitude,
+        city: geo.city,
+        locality: geo.locality,
+        state: geo.state,
+      });
+      const token = await getToken();
+      await api("/users/me", {
+        method: "PATCH",
+        token,
+        body: {
+          city: geo.city || null,
+          locality: geo.locality || null,
+          state: geo.state || null,
+          location: {
+            type: "Point",
+            coordinates: [c.longitude, c.latitude],
+          },
+        },
+      });
+      setMapVisible(false);
+      Alert.alert(
+        t("settings.locationUpdated"),
+        geo.locality ? `${geo.locality}, ${geo.city || ""}` : geo.city || ""
+      );
+    } catch {
+      Alert.alert(t("common.error"), t("settings.locationUpdateFailed"));
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const handleSaveWorkRange = async (value: number) => {
+    setSavingRange(true);
+    setWorkRange(value);
+    setWorkRangeVisible(false);
+    try {
+      const token = await getToken();
+      await api("/users/me", {
+        method: "PATCH",
+        token,
+        body: { work_range_km: value },
+      });
+    } catch {
+      Alert.alert(t("common.error"));
+    } finally {
+      setSavingRange(false);
+    }
   };
 
   return (
@@ -322,7 +533,7 @@ export default function SettingsScreen() {
             textColor={colors.textPrimary}
             subtextColor={colors.textSecondary}
           />
-          {usagePreference === "find_work" && (
+          {isWorker && (
             <>
               <Divider />
               <SettingRow
@@ -338,8 +549,9 @@ export default function SettingsScreen() {
           <Divider />
           <SettingRow
             icon="map-marker"
-            title={t("settings.updateLocation")}
-            onPress={() => {}}
+            title={updatingLocation ? t("settings.updatingLocation") : t("settings.updateLocation")}
+            value={locationLabel}
+            onPress={handleUpdateLocation}
             iconBg="rgba(239,68,68,0.08)"
             iconColor="#EF4444"
             textColor={colors.textPrimary}
@@ -438,6 +650,142 @@ export default function SettingsScreen() {
           />
         </SectionCard>
       </ScrollView>
+
+      {/* Map Location Picker Modal */}
+      <Modal
+        visible={mapVisible}
+        animationType="slide"
+        onRequestClose={() => setMapVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
+          {/* Header */}
+          <View style={{ paddingTop: Platform.OS === "ios" ? 56 : 16, paddingHorizontal: 20, paddingBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <TouchableOpacity onPress={() => setMapVisible(false)}>
+                <FontAwesome name="arrow-left" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
+                {t("settings.updateLocation")}
+              </Text>
+              <View style={{ width: 18 }} />
+            </View>
+            <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary, textAlign: "center" }}>
+              {t("onboarding.moveMapToAdjust")}
+            </Text>
+          </View>
+
+          {/* Map */}
+          {mapCoords && (
+            <View style={{ flex: 1, marginHorizontal: 16, borderRadius: 16, overflow: "hidden", marginBottom: 12 }}>
+              <SettingsLocationMap
+                initialCoords={mapCoords}
+                onCenterChanged={onMapCenterChanged}
+              />
+            </View>
+          )}
+
+          {/* Location label */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+            {geocoding ? (
+              <View style={{ backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="small" color="#059669" />
+                <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary, marginLeft: 8 }}>
+                  {t("onboarding.detectingLocation")}
+                </Text>
+              </View>
+            ) : mapLabel ? (
+              <View style={{ backgroundColor: "rgba(16,185,129,0.1)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                <FontAwesome name="check-circle" size={16} color="#10B981" />
+                <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: "#10B981", marginLeft: 8 }}>
+                  {mapLabel}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Confirm button */}
+          <View style={{ paddingHorizontal: 20, paddingBottom: Platform.OS === "ios" ? 36 : 20 }}>
+            <TouchableOpacity
+              onPress={handleConfirmMapLocation}
+              disabled={geocoding || savingLocation}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: geocoding || savingLocation ? "#D1D5DB" : "#059669",
+                borderRadius: 12,
+                paddingVertical: 16,
+                alignItems: "center",
+              }}
+            >
+              {savingLocation ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={{ fontSize: 16, fontFamily: "DMSans_600SemiBold", color: "#FFF" }}>
+                  {t("settings.confirmLocation")}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Work Range Picker Modal */}
+      <Modal
+        visible={workRangeVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWorkRangeVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          activeOpacity={1}
+          onPress={() => setWorkRangeVisible(false)}
+        />
+        <View style={{
+          backgroundColor: isDark ? "#111827" : "#FFFFFF",
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingBottom: 32,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}>
+          <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)" }} />
+          </View>
+          <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary, paddingHorizontal: 20, paddingVertical: 14 }}>
+            {t("settings.workRange")}
+          </Text>
+          {WORK_RANGE_OPTIONS.map((opt, i) => {
+            const isSelected = workRange === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => handleSaveWorkRange(opt.value)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderBottomWidth: i < WORK_RANGE_OPTIONS.length - 1 ? 1 : 0,
+                  borderBottomColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                }}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontFamily: isSelected ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                  color: isSelected ? "#059669" : colors.textPrimary,
+                }}>
+                  {opt.label}
+                </Text>
+                {isSelected && <FontAwesome name="check" size={14} color="#059669" />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Modal>
     </View>
   );
 }

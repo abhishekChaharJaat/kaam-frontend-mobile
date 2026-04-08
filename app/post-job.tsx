@@ -56,6 +56,7 @@ const BUDGET_TYPES = [
   { key: "discuss", labelKey: "jobs.discuss", icon: "comments-o" as const },
 ];
 
+
 const URGENCY_OPTIONS = [
   { key: "urgent", labelKey: "jobs.urgent", icon: "bolt", color: "#EF4444" },
   { key: "today", labelKey: "jobs.today", icon: "clock-o", color: "#F59E0B" },
@@ -144,10 +145,6 @@ export default function PostJob() {
           required_date: requiredDate
             ? requiredDate.toISOString().split("T")[0]
             : undefined,
-          city: location?.city || undefined,
-          locality: location?.locality || undefined,
-          latitude: location?.latitude || undefined,
-          longitude: location?.longitude || undefined,
         },
       });
       showToast(t("jobs.jobLiveMessage"), "success");

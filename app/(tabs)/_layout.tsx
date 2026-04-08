@@ -234,6 +234,11 @@ interface BackendUser {
   locality?: string;
   state?: string;
   work_title?: string;
+  work_range_km?: number;
+  location?: {
+    type: string;
+    coordinates: [number, number]; // [longitude, latitude]
+  };
 }
 
 export default function TabLayout() {
@@ -263,16 +268,19 @@ export default function TabLayout() {
         const me = await api<BackendUser>("/auth/me", { token });
 
         const hasName = !!me.full_name && me.full_name !== "User";
-        const hasLocation = !!me.city;
+        const hasCoords = me.location?.coordinates && (me.location.coordinates[0] !== 0 || me.location.coordinates[1] !== 0);
+        const hasLocation = !!me.city || !!hasCoords;
         const hasPreference = !!me.usage_preference;
         const isWorkerAccount = me.usage_preference === "find_work";
         const hasWorkTitle = !isWorkerAccount || !!me.work_title;
+        const hasWorkRange = !isWorkerAccount || me.work_range_km != null;
 
-        if (hasName && hasLocation && hasPreference && hasWorkTitle) {
+        if (hasName && hasLocation && hasPreference && hasWorkTitle && hasWorkRange) {
           setUsagePreference(me.usage_preference as "find_worker" | "find_work");
+          const coords = me.location?.coordinates;
           setLocation({
-            latitude: 0,
-            longitude: 0,
+            latitude: coords?.[1] ?? 0,
+            longitude: coords?.[0] ?? 0,
             city: me.city,
             locality: me.locality,
             state: me.state,
@@ -287,7 +295,7 @@ export default function TabLayout() {
             setOnboardingStep("location-permission");
           } else if (!hasPreference) {
             setOnboardingStep("usage-preference");
-          } else if (isWorkerAccount && !me.work_title) {
+          } else if (isWorkerAccount && (!me.work_title || me.work_range_km == null)) {
             setOnboardingStep("category-selection");
           } else {
             setOnboardingStep("usage-preference");
@@ -298,7 +306,7 @@ export default function TabLayout() {
       }
       setVerifying(false);
     })();
-  }, [isLoaded, isSignedIn, getToken, setUsagePreference, setLocation, setOnboardingComplete, setOnboardingStep]);
+  }, [isLoaded, isSignedIn]);
 
   if (!isLoaded || verifying) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/login" />;
@@ -315,7 +323,6 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
       }}
-      sceneContainerStyle={{ paddingBottom: 0 }}
     >
       <Tabs.Screen
         name="index"
@@ -329,12 +336,7 @@ export default function TabLayout() {
         name="jobs"
         options={
           isWorkerMode
-            ? {
-                title: t("common.post"),
-                listeners: {
-                  tabPress: (e) => e.preventDefault(),
-                },
-              }
+            ? { title: t("common.post") }
             : { href: null }
         }
       />
