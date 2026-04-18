@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Animated,
   Platform,
@@ -283,6 +282,48 @@ function ConversationCard({
   );
 }
 
+function ChatSkeleton({ colors, isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+  const barColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+  const SkeletonRow = () => (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14 }}>
+      <Animated.View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: barColor, opacity }} />
+      <View style={{ flex: 1, marginLeft: 14 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Animated.View style={{ width: 120, height: 14, borderRadius: 7, backgroundColor: barColor, opacity }} />
+          <Animated.View style={{ width: 28, height: 10, borderRadius: 5, backgroundColor: barColor, opacity }} />
+        </View>
+        <Animated.View style={{ width: 180, height: 12, borderRadius: 6, backgroundColor: barColor, opacity, marginTop: 8 }} />
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <View key={i}>
+          <SkeletonRow />
+          {i < 7 && (
+            <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", marginLeft: 84, marginRight: 20 }} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function ChatList() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -448,11 +489,7 @@ export default function ChatList() {
 
       {/* Content */}
       {loading ? (
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <ActivityIndicator size="large" color="#059669" />
-        </View>
+        <ChatSkeleton colors={colors} isDark={isDark} />
       ) : (
         <FlatList
           data={conversations}

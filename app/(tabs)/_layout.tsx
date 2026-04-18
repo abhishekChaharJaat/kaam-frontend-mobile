@@ -67,12 +67,6 @@ function isNestedScreenActive(state: BottomTabBarProps["state"]): boolean {
   return false;
 }
 
-function getAndroidBottom(bottomInset: number): number {
-  if (bottomInset === 0) return 16;          // physical / capacitive buttons
-  if (bottomInset < 30) return bottomInset + 8; // gesture navigation
-  return bottomInset;                        // 3-button software nav bar
-}
-
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -90,14 +84,33 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const hasFab = visibleRoutes.some((r) => r.name === "jobs");
 
+  const isAndroid = Platform.OS === "android";
+
   return (
     <View
-      style={{
-        position: "absolute",
-        bottom: Platform.OS === "ios" ? 24 : getAndroidBottom(insets.bottom),
-        left: 16,
-        right: 16,
-      }}
+      style={
+        isAndroid
+          ? {
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              paddingBottom: insets.bottom,
+              backgroundColor: colors.bgSurface,
+              borderTopWidth: 1,
+              borderTopColor:
+                colors.bgBase === "#0A0F1A"
+                  ? "rgba(255,255,255,0.06)"
+                  : "rgba(0,0,0,0.08)",
+              elevation: 8,
+            }
+          : {
+              position: "absolute",
+              bottom: 24,
+              left: 16,
+              right: 16,
+            }
+      }
     >
       <View
         style={{
@@ -105,19 +118,23 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           alignItems: "center",
           justifyContent: "space-around",
           backgroundColor: colors.bgSurface,
-          borderRadius: 28,
+          borderRadius: isAndroid ? 0 : 28,
           height: 64,
           paddingHorizontal: 8,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: colors.bgBase === "#0A0F1A" ? 0.5 : 0.12,
-          shadowRadius: 24,
-          elevation: 16,
-          borderWidth: 1,
-          borderColor:
-            colors.bgBase === "#0A0F1A"
-              ? "rgba(255,255,255,0.06)"
-              : "rgba(0,0,0,0.04)",
+          ...(isAndroid
+            ? {}
+            : {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: colors.bgBase === "#0A0F1A" ? 0.5 : 0.12,
+                shadowRadius: 24,
+                elevation: 16,
+                borderWidth: 1,
+                borderColor:
+                  colors.bgBase === "#0A0F1A"
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+              }),
         }}
       >
         {visibleRoutes.map((route) => {

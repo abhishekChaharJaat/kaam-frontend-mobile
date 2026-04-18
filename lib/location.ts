@@ -16,6 +16,39 @@ export async function checkLocationPermission(): Promise<"granted" | "denied" | 
   return "denied";
 }
 
+/** Returns a human-readable area name, filtering out Plus Codes and numeric-only strings */
+function isPlusCodeOrJunk(value: string): boolean {
+  // Plus Codes look like "CM9W+98" or "CM9W+98 Mathura"
+  if (/^[A-Z0-9]{4}\+/.test(value)) return true;
+  // Pure numbers / postal codes
+  if (/^\d+$/.test(value.trim())) return true;
+  return false;
+}
+
+function pickAreaName(
+  address: Location.LocationGeocodedAddress | null | undefined,
+  city?: string,
+): string | undefined {
+  if (!address) return undefined;
+  // Candidates in order of preference: street, district, subregion, name
+  const candidates = [
+    address.street,
+    address.district,
+    address.subregion,
+    address.name,
+  ];
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      !isPlusCodeOrJunk(candidate) &&
+      candidate.toLowerCase() !== city?.toLowerCase()
+    ) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 export async function getCurrentLocation(): Promise<LocationResult | null> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== "granted") return null;
@@ -39,9 +72,9 @@ export async function getCurrentLocation(): Promise<LocationResult | null> {
       const city = address.city || address.subregion || address.district || undefined;
       result.city = city;
       result.state = address.region || undefined;
-      // Use the most specific area name available, but skip if it's same as city
-      const area = address.name || address.street || address.district || address.subregion || undefined;
-      result.locality = area && area.toLowerCase() !== city?.toLowerCase() ? area : undefined;
+      // Use the most specific area name available, skip Plus Codes and duplicates of city
+      const area = pickAreaName(address, city);
+      result.locality = area;
       result.country = address.country || undefined;
     }
   } catch {}
@@ -60,11 +93,10 @@ export async function reverseGeocode(
     });
 
     const city = address?.city || address?.subregion || address?.district || undefined;
-    const area = address?.name || address?.street || address?.district || address?.subregion || undefined;
     return {
       city,
       state: address?.region || undefined,
-      locality: area && area.toLowerCase() !== city?.toLowerCase() ? area : undefined,
+      locality: pickAreaName(address, city),
       country: address?.country || undefined,
     };
   } catch {

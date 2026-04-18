@@ -135,8 +135,9 @@ function SettingRow({
           color={danger ? "#EF4444" : iconColor || "#059669"}
         />
       </View>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, marginRight: 8 }}>
         <Text
+          numberOfLines={1}
           style={{
             fontSize: 15,
             fontFamily: "DMSans_500Medium",
@@ -148,11 +149,14 @@ function SettingRow({
       </View>
       {value && (
         <Text
+          numberOfLines={1}
           style={{
             fontSize: 13,
             fontFamily: "DMSans_400Regular",
             color: subtextColor,
             marginRight: 6,
+            flexShrink: 0,
+            maxWidth: "45%",
           }}
         >
           {value}

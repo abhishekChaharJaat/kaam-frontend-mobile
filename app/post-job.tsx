@@ -12,6 +12,7 @@ import {
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
@@ -90,6 +91,7 @@ export default function PostJob() {
   const { t } = useTranslation();
   const { showToast } = useToast();
 
+  const insets = useSafeAreaInsets();
   const progressAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -270,7 +272,10 @@ export default function PostJob() {
       </Animated.View>
 
       {/* Bottom action */}
-      <View className="px-5 pb-8 pt-4 border-t border-border bg-bg-base">
+      <View
+        className="px-5 pt-4 border-t border-border bg-bg-base"
+        style={{ paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 16) + 8 : 32 }}
+      >
         {step < 3 ? (
           <TouchableOpacity
             className="rounded-full py-4 items-center"

@@ -15,7 +15,6 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import KaamSpotLogo from "@/components/KaamSpotLogo";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
@@ -368,7 +367,7 @@ function HomeSkeletonJobCard({ isDark }: { isDark: boolean }) {
 
 function HomeSkeleton({ isDark }: { isDark: boolean }) {
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Platform.OS === "android" ? 120 : 100 }} showsVerticalScrollIndicator={false}>
       {/* Hero header skeleton */}
       <View style={{
         backgroundColor: "#059669",
@@ -620,7 +619,7 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bgBase }}
-      contentContainerStyle={{ paddingBottom: 100 }}
+      contentContainerStyle={{ paddingBottom: Platform.OS === "android" ? 120 : 100 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -670,11 +669,13 @@ export default function HomeScreen() {
                   marginTop: 2,
                 }}
               >
-                {isEmployer ? "KaamHetu" : t("home.findWork")}
+                {isEmployer ? (
+                  <>
+                    Kaam<Text style={{ color: "#A7F3D0" }}>Spot</Text>
+                  </>
+                ) : t("home.findWork")}
               </Text>
             </View>
-
-            <KaamSpotLogo size="sm" onDark />
           </View>
 
           {/* Location Pill */}
