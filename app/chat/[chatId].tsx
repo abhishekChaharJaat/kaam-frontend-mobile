@@ -11,7 +11,7 @@ import {
   Alert,
   Animated,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
@@ -20,7 +20,9 @@ import { ChatWebSocket } from "@/lib/websocket";
 import { useTranslation } from "react-i18next";
 import { useUserStore } from "@/store/user";
 import { useToast } from "@/lib/toast";
+import { useChatUnread } from "@/contexts/ChatUnreadContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { RateWorkerModal } from "@/components/RateWorkerModal";
 
 interface Message {
   id: string;
@@ -124,10 +126,21 @@ export default function ChatRoom() {
   const [assigning, setAssigning] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [jobCompleted, setJobCompleted] = useState(false);
+  const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState<boolean | null>(null);
   const wsRef = useRef<ChatWebSocket | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const myMongoIdRef = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { refresh: refreshUnreadBadge } = useChatUnread();
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        void refreshUnreadBadge();
+      };
+    }, [refreshUnreadBadge])
+  );
 
   const mergeMessages = useCallback(
     (prev: Message[], incoming: Message[]): Message[] => {
@@ -157,7 +170,18 @@ export default function ChatRoom() {
         setMessages(messagesData);
         setMyMongoId(meData.id);
         myMongoIdRef.current = meData.id;
-        if (convData.job_status === "completed") setJobCompleted(true);
+        if (convData.job_status === "completed") {
+          setJobCompleted(true);
+          try {
+            const status = await api<{ has_reviewed: boolean }>(
+              `/reviews/job/${convData.job_id}/me`,
+              { token }
+            );
+            setHasReviewed(status.has_reviewed);
+          } catch {
+            setHasReviewed(false);
+          }
+        }
 
         ws = new ChatWebSocket(chatId ?? "", token, (msg) => {
           if (msg.error) return;
@@ -173,11 +197,34 @@ export default function ChatRoom() {
         pollRef.current = setInterval(async () => {
           try {
             const freshToken = await getToken();
-            const fresh = await api<Message[]>(
-              `/conversations/${chatId}/messages`,
-              { token: freshToken }
-            );
+            const [fresh, freshConv] = await Promise.all([
+              api<Message[]>(`/conversations/${chatId}/messages`, { token: freshToken }),
+              api<ConversationInfo>(`/conversations/${chatId}`, { token: freshToken }),
+            ]);
             setMessages((prev) => mergeMessages(prev, fresh));
+            setConv((prev) => {
+              if (!prev) return freshConv;
+              if (prev.job_status === freshConv.job_status) return prev;
+              return { ...prev, job_status: freshConv.job_status };
+            });
+            if (freshConv.job_status === "completed") {
+              setJobCompleted((wasCompleted) => {
+                if (!wasCompleted) {
+                  (async () => {
+                    try {
+                      const status = await api<{ has_reviewed: boolean }>(
+                        `/reviews/job/${freshConv.job_id}/me`,
+                        { token: freshToken }
+                      );
+                      setHasReviewed(status.has_reviewed);
+                    } catch {
+                      setHasReviewed(false);
+                    }
+                  })();
+                }
+                return true;
+              });
+            }
           } catch {}
         }, 5000);
       } catch {
@@ -285,7 +332,9 @@ export default function ChatRoom() {
               const token = await getToken();
               await api(`/jobs/${conv.job_id}/complete`, { method: "POST", token });
               setJobCompleted(true);
+              setHasReviewed(false);
               showToast(t("chat.jobCompleted"), "success");
+              if (isEmployer) setRateModalVisible(true);
             } catch {
               showToast(t("common.error"), "error");
             } finally {
@@ -295,7 +344,7 @@ export default function ChatRoom() {
         },
       ]
     );
-  }, [conv, getToken, showToast, t]);
+  }, [conv, getToken, showToast, t, isEmployer]);
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isSystem = item.message_type === "system";
@@ -304,10 +353,15 @@ export default function ChatRoom() {
 
     if (isSystem) {
       let displayText = item.text ?? "";
-      if (isEmployer && conv?.is_assigned) {
-        const workerName = conv.responder_name || conv.poster_name || t("chat.user");
-        if (displayText.toLowerCase().includes("assigned to you")) {
+      const lower = displayText.toLowerCase();
+      const isAssignmentMsg =
+        lower.startsWith("job assigned to") || lower.includes("assigned to you");
+      if (isAssignmentMsg && conv?.is_assigned) {
+        if (isEmployer) {
+          const workerName = conv.responder_name || conv.poster_name || t("chat.user");
           displayText = `${t("chat.jobAssignedTo", { name: workerName })}`;
+        } else {
+          displayText = t("chat.jobAssignedToYou");
         }
       }
       return (
@@ -585,7 +639,9 @@ export default function ChatRoom() {
               <FontAwesome name="check-circle" size={16} color="#FFFFFF" />
             )}
             <Text style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 14 }}>
-              {t("chat.closeWithWorker")}
+              {t("chat.closeWithWorker", {
+                name: conv.responder_name || t("chat.user"),
+              })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -632,6 +688,72 @@ export default function ChatRoom() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      )}
+
+      {/* Post-completion: employer can rate the worker */}
+      {jobCompleted && isEmployer && hasReviewed === false && conv && (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.bgSurface,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setRateModalVisible(true)}
+            activeOpacity={0.85}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              backgroundColor: "#F59E0B",
+              paddingVertical: 12,
+              borderRadius: 12,
+            }}
+          >
+            <FontAwesome name="star" size={16} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>
+              {t("rating.title")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Post-completion: worker can rate the employer */}
+      {jobCompleted && !isEmployer && hasReviewed === false && conv && (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.bgSurface,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setRateModalVisible(true)}
+            activeOpacity={0.85}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              backgroundColor: "#F59E0B",
+              paddingVertical: 12,
+              borderRadius: 12,
+            }}
+          >
+            <FontAwesome name="star" size={16} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>
+              {t("rating.rateEmployerCta")}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -694,6 +816,22 @@ export default function ChatRoom() {
             <FontAwesome name="send" size={16} color="white" />
           </TouchableOpacity>
         </View>
+      )}
+
+      {conv && (
+        <RateWorkerModal
+          visible={rateModalVisible}
+          jobId={conv.job_id}
+          revieweeUserId={
+            myMongoId === conv.poster_user_id
+              ? conv.responder_user_id
+              : conv.poster_user_id
+          }
+          revieweeName={isEmployer ? conv.responder_name : conv.poster_name}
+          targetRole={isEmployer ? "worker" : "employer"}
+          onClose={() => setRateModalVisible(false)}
+          onSubmitted={() => setHasReviewed(true)}
+        />
       )}
     </KeyboardAvoidingView>
   );

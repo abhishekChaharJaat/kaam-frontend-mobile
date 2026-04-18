@@ -5,6 +5,7 @@ import { useThemeColors } from "@/lib/useThemeColors";
 interface KaamSpotLogoProps {
   size?: "sm" | "md" | "lg";
   onDark?: boolean;
+  row?: boolean;
 }
 
 const sizeMap = {
@@ -13,12 +14,18 @@ const sizeMap = {
   lg: { box: 44, icon: 26, fontSize: 30, radius: 11, gap: 12 },
 };
 
-export default function KaamSpotLogo({ size = "md", onDark = false }: KaamSpotLogoProps) {
+export default function KaamSpotLogo({ size = "md", onDark = false, row = false }: KaamSpotLogoProps) {
   const colors = useThemeColors();
   const { box, icon, fontSize, radius, gap } = sizeMap[size];
 
   return (
-    <View style={{ alignItems: "center", gap }}>
+    <View
+      style={{
+        flexDirection: row ? "row" : "column",
+        alignItems: "center",
+        gap,
+      }}
+    >
       {/* Icon box — white on dark bg, green on light bg */}
       <View
         style={{

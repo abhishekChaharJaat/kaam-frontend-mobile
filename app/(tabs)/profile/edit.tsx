@@ -63,7 +63,6 @@ export default function EditProfileScreen() {
     { label: "2–5 km", value: 5, icon: "bicycle" as const, color: "#3B82F6" },
     { label: "5–10 km", value: 10, icon: "motorcycle" as const, color: "#6366F1" },
     { label: "10–20 km", value: 20, icon: "car" as const, color: "#8B5CF6" },
-    { label: "20+ km", value: 50, icon: "road" as const, color: "#EC4899" },
     { label: t("settings.inMyCity"), value: 0, icon: "building-o" as const, color: "#F59E0B" },
   ];
 

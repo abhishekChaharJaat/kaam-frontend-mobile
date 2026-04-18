@@ -15,6 +15,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { setStatusBarBackgroundColor, setStatusBarStyle } from "expo-status-bar";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import KaamSpotLogo from "@/components/KaamSpotLogo";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
@@ -27,6 +28,7 @@ interface Job {
   city?: string;
   locality?: string;
   urgency: string;
+  status?: string;
   budget_type?: string;
   budget_min?: number;
   budget_max?: number;
@@ -36,7 +38,71 @@ interface Job {
   category_id?: string;
   category_name?: string;
   category_slug?: string;
+  required_date?: string;
+  required_date_end?: string;
   location?: { type: string; coordinates: [number, number] };
+}
+
+const STATUS_PILL_CONFIG: Record<
+  string,
+  { labelKey: string; color: string; bg: string; darkBg: string }
+> = {
+  open: {
+    labelKey: "jobs.open",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.08)",
+    darkBg: "rgba(59,130,246,0.18)",
+  },
+  assigned: {
+    labelKey: "jobs.assigned",
+    color: "#8B5CF6",
+    bg: "rgba(139,92,246,0.08)",
+    darkBg: "rgba(139,92,246,0.18)",
+  },
+  completed: {
+    labelKey: "jobs.completed",
+    color: "#059669",
+    bg: "rgba(5,150,105,0.1)",
+    darkBg: "rgba(5,150,105,0.2)",
+  },
+  cancelled: {
+    labelKey: "jobs.cancelled",
+    color: "#DC2626",
+    bg: "rgba(220,38,38,0.08)",
+    darkBg: "rgba(220,38,38,0.18)",
+  },
+  hidden: {
+    labelKey: "jobs.hidden",
+    color: "#6B7280",
+    bg: "rgba(107,114,128,0.12)",
+    darkBg: "rgba(156,163,175,0.2)",
+  },
+};
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function formatScheduledLabel(job: Pick<Job, "required_date" | "required_date_end" | "urgency">, fallback: string): string {
+  if (job.required_date && job.required_date_end) {
+    return `${formatShortDate(job.required_date)} – ${formatShortDate(job.required_date_end)}`;
+  }
+  if (job.required_date) return formatShortDate(job.required_date);
+  return fallback;
+}
+
+function urgencyLabelKey(urgency: string): string {
+  const map: Record<string, string> = {
+    today: "jobs.today",
+    tomorrow: "jobs.tomorrow",
+    this_week: "jobs.thisWeek",
+    flexible: "jobs.flexible",
+    urgent: "jobs.urgent",
+    custom: "jobs.custom",
+  };
+  return map[urgency] || "jobs.flexible";
 }
 
 /** Haversine distance in km between two lat/lng points */
@@ -54,6 +120,21 @@ function getDistanceKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function formatKm(km: number): string {
+  if (km < 10) return km.toFixed(1);
+  return Math.round(km).toString();
+}
+
+function jobDistanceKm(
+  job: Pick<Job, "location">,
+  coords: { latitude: number; longitude: number } | null,
+): number | null {
+  const jobCoords = job.location?.coordinates;
+  if (!coords || !jobCoords || jobCoords.length !== 2) return null;
+  if (coords.latitude === 0 && coords.longitude === 0) return null;
+  return getDistanceKm(coords.latitude, coords.longitude, jobCoords[1], jobCoords[0]);
+}
+
 const URGENCY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   urgent: { icon: "bolt", color: "#EF4444", bg: "rgba(239,68,68,0.1)" },
   today: { icon: "clock-o", color: "#F59E0B", bg: "rgba(245,158,11,0.1)" },
@@ -69,13 +150,17 @@ function JobCard({
   colors,
   isDark,
   t,
+  distanceKm,
+  showStatus = false,
 }: {
   job: Job;
   index: number;
   onPress: () => void;
   colors: ReturnType<typeof useThemeColors>;
   isDark: boolean;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  distanceKm?: number | null;
+  showStatus?: boolean;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -98,16 +183,17 @@ function JobCard({
   }, []);
 
   const urgency = URGENCY_CONFIG[job.urgency] || URGENCY_CONFIG.flexible;
-  const budgetLabel =
-    job.budget_type === "negotiable"
-      ? t("jobs.negotiable")
-      : job.budget_type === "discuss"
-        ? t("jobs.discuss")
-        : job.budget_min && job.budget_max
-          ? `₹${job.budget_min} - ₹${job.budget_max}`
-          : job.budget_min
-            ? `₹${job.budget_min}+`
-            : null;
+  const budgetLabel = (() => {
+    if (job.budget_type === "discuss") return t("jobs.discuss");
+    if (job.budget_min != null && job.budget_max != null) {
+      if (job.budget_min === job.budget_max) return `₹${job.budget_min}`;
+      return `₹${job.budget_min} - ₹${job.budget_max}`;
+    }
+    if (job.budget_min != null) return `₹${job.budget_min}+`;
+    if (job.budget_type === "negotiable") return t("jobs.negotiable");
+    if (job.budget_type === "fixed") return t("jobs.fixedPrice");
+    return null;
+  })();
 
   return (
     <Animated.View
@@ -210,10 +296,42 @@ function JobCard({
               : "rgba(0,0,0,0.04)",
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 11, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>
-              {t("home.whenToStart")}:
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap" }}>
+            {showStatus && job.status && (() => {
+              const cfg =
+                STATUS_PILL_CONFIG[job.status] ?? STATUS_PILL_CONFIG.open;
+              return (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: isDark ? cfg.darkBg : cfg.bg,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: cfg.color,
+                      marginRight: 5,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontFamily: "DMSans_600SemiBold",
+                      color: cfg.color,
+                    }}
+                  >
+                    {t(cfg.labelKey, { defaultValue: job.status })}
+                  </Text>
+                </View>
+              );
+            })()}
             <View
               style={{
                 flexDirection: "row",
@@ -224,17 +342,45 @@ function JobCard({
                 borderRadius: 6,
               }}
             >
+              <FontAwesome
+                name={urgency.icon as React.ComponentProps<typeof FontAwesome>["name"]}
+                size={10}
+                color={urgency.color}
+                style={{ marginRight: 4 }}
+              />
               <Text
                 style={{
                   fontSize: 11,
                   fontFamily: "DMSans_600SemiBold",
                   color: urgency.color,
-                  textTransform: "capitalize",
                 }}
               >
-                {job.urgency.replace("_", " ")}
+                {formatScheduledLabel(job, t(urgencyLabelKey(job.urgency)))}
               </Text>
             </View>
+            {distanceKm != null && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: isDark ? "rgba(59,130,246,0.14)" : "rgba(59,130,246,0.08)",
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 6,
+                }}
+              >
+                <FontAwesome name="location-arrow" size={9} color="#3B82F6" style={{ marginRight: 4 }} />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "DMSans_600SemiBold",
+                    color: "#3B82F6",
+                  }}
+                >
+                  {t("jobs.kmAway", { km: formatKm(distanceKm) })}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -262,64 +408,6 @@ function JobCard({
   );
 }
 
-function StatPill({
-  icon,
-  label,
-  value,
-  iconColor,
-  colors,
-  isDark,
-}: {
-  icon: string;
-  label: string;
-  value: string | number;
-  iconColor: string;
-  colors: ReturnType<typeof useThemeColors>;
-  isDark: boolean;
-}) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.bgSurface,
-        borderRadius: 14,
-        padding: 14,
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: isDark ? 0.2 : 0.04,
-        shadowRadius: 6,
-        elevation: 2,
-      }}
-    >
-      <FontAwesome name={icon as React.ComponentProps<typeof FontAwesome>["name"]} size={16} color={iconColor} />
-      <Text
-        style={{
-          fontSize: 18,
-          fontFamily: "DMSans_700Bold",
-          color: colors.textPrimary,
-          marginTop: 6,
-        }}
-      >
-        {value}
-      </Text>
-      <Text
-        style={{
-          fontSize: 10,
-          fontFamily: "DMSans_500Medium",
-          color: colors.textTertiary,
-          marginTop: 2,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 function SkeletonBlock({ width, height = 12, radius = 6, style }: {
   width: number | string; height?: number; radius?: number; style?: object;
@@ -367,7 +455,7 @@ function HomeSkeletonJobCard({ isDark }: { isDark: boolean }) {
 
 function HomeSkeleton({ isDark }: { isDark: boolean }) {
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Platform.OS === "android" ? 120 : 100 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       {/* Hero header skeleton */}
       <View style={{
         backgroundColor: "#059669",
@@ -410,10 +498,15 @@ export default function HomeScreen() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [categoryIdToSlug, setCategoryIdToSlug] = useState<Record<string, string>>({});
   const [filterVisible, setFilterVisible] = useState(false);
+  const [rangeFilterVisible, setRangeFilterVisible] = useState(false);
+  const [rangeOverride, setRangeOverride] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [employerStatusFilter, setEmployerStatusFilter] = useState<
+    "open" | "assigned" | "completed" | "hidden"
+  >("open");
   const { getToken } = useAuth();
   const { user } = useUser();
   const { usagePreference, location } = useUserStore();
@@ -484,7 +577,11 @@ export default function HomeScreen() {
     } catch {}
   };
 
-  const fetchData = async (query?: string, categorySlugs?: string[]) => {
+  const fetchData = async (
+    query?: string,
+    categorySlugs?: string[],
+    rangeOverrideArg?: number | null,
+  ) => {
     try {
       const token = await getToken();
       if (!query) await syncUser(token);
@@ -513,7 +610,9 @@ export default function HomeScreen() {
         const userLng = savedUserCoords?.longitude;
         const hasUserCoords = userLat != null && userLng != null && (userLat !== 0 || userLng !== 0);
         const userCity = (savedUserCity || location?.city)?.toLowerCase().trim();
-        const range = workRangeKm;
+        const effectiveRange =
+          rangeOverrideArg !== undefined ? rangeOverrideArg : rangeOverride;
+        const range = effectiveRange ?? workRangeKm;
 
         const inRange: Job[] = [];
         const inCity: Job[] = [];
@@ -583,6 +682,26 @@ export default function HomeScreen() {
 
   const isEmployer = usagePreference === "find_worker";
 
+  const RANGE_OPTIONS: {
+    label: string;
+    value: number;
+    icon: React.ComponentProps<typeof FontAwesome>["name"];
+    color: string;
+  }[] = [
+    { label: "Under 1 km", value: 1, icon: "street-view", color: "#10B981" },
+    { label: "Under 2 km", value: 2, icon: "street-view", color: "#059669" },
+    { label: "2–5 km", value: 5, icon: "bicycle", color: "#3B82F6" },
+    { label: "5–10 km", value: 10, icon: "motorcycle", color: "#6366F1" },
+    { label: "10–20 km", value: 20, icon: "car", color: "#8B5CF6" },
+    { label: t("settings.inMyCity"), value: 0, icon: "building-o", color: "#F59E0B" },
+  ];
+
+  const activeRangeValue = rangeOverride ?? workRangeKm;
+  const activeRangeLabel =
+    RANGE_OPTIONS.find((o) => o.value === activeRangeValue)?.label ??
+    t("home.range");
+  const rangeIsCustom = rangeOverride !== null;
+
   const CATEGORIES = [
     { id: "plumber", name: "Plumber" },
     { id: "electrician", name: "Electrician" },
@@ -606,32 +725,46 @@ export default function HomeScreen() {
     { id: "packer-mover", name: "Packer / Mover Helper" },
   ];
 
-  const activeJobs = nearbyJobs.length;
-  const totalResponses = nearbyJobs.reduce(
-    (sum, j) => sum + j.conversation_count,
-    0
+  const filteredEmployerJobs = nearbyJobs.filter(
+    (j) => (j.status || "open") === employerStatusFilter
   );
+  const employerStatusTabs = [
+    { key: "open" as const, labelKey: "jobs.open", color: "#3B82F6" },
+    { key: "assigned" as const, labelKey: "jobs.assigned", color: "#8B5CF6" },
+    { key: "completed" as const, labelKey: "jobs.completed", color: "#059669" },
+    { key: "hidden" as const, labelKey: "jobs.hidden", color: "#6B7280" },
+  ];
 
   if (loading) {
     return <HomeSkeleton isDark={isDark} />;
   }
 
+  const handleHomeRefresh = () => {
+    setRefreshing(true);
+    void (async () => {
+      await fetchUserAndCategories();
+      await fetchData(searchQuery.trim() || undefined, Array.from(selectedCategories));
+    })();
+  };
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bgBase }}
-      contentContainerStyle={{ paddingBottom: Platform.OS === "android" ? 120 : 100 }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            fetchData();
-          }}
-          tintColor="#059669"
-        />
-      }
-    >
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.bgBase }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleHomeRefresh}
+            tintColor="#059669"
+            colors={["#059669"]}
+            progressBackgroundColor={Platform.OS === "android" ? colors.bgSurface : undefined}
+            title={Platform.OS === "ios" ? t("common.refreshing") : undefined}
+            titleColor={colors.textSecondary}
+          />
+        }
+      >
       {/* Hero Header */}
       <Animated.View style={{ opacity: heroFade }}>
         <View
@@ -644,74 +777,69 @@ export default function HomeScreen() {
             borderBottomRightRadius: 24,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <View style={{ flex: 1 }}>
+          <View>
+            <View style={{ alignSelf: "flex-start" }}>
+              <KaamSpotLogo size="sm" onDark row />
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 12,
+                gap: 10,
+              }}
+            >
               <Text
                 style={{
                   fontSize: 14,
                   fontFamily: "DMSans_400Regular",
                   color: "rgba(255,255,255,0.75)",
+                  flexShrink: 0,
                 }}
               >
                 {`${t("common.hello")}, ${firstName}`}
               </Text>
-              <Text
+
+              {/* Location Pill */}
+              <TouchableOpacity
+                onPress={() => router.push("/settings")}
+                activeOpacity={0.7}
                 style={{
-                  fontSize: 24,
-                  fontFamily: "DMSans_700Bold",
-                  color: "#FFFFFF",
-                  marginTop: 2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                  flexShrink: 1,
+                  maxWidth: "50%",
                 }}
               >
-                {isEmployer ? (
-                  <>
-                    Kaam<Text style={{ color: "#A7F3D0" }}>Spot</Text>
-                  </>
-                ) : t("home.findWork")}
-              </Text>
+                <FontAwesome name="map-marker" size={12} color="#FFFFFF" />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: "DMSans_500Medium",
+                    color: "#FFFFFF",
+                    marginLeft: 6,
+                    flexShrink: 1,
+                    minWidth: 0,
+                  }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {locationLabel}
+                </Text>
+                <FontAwesome
+                  name="chevron-down"
+                  size={8}
+                  color="rgba(255,255,255,0.7)"
+                  style={{ marginLeft: 6 }}
+                />
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* Location Pill */}
-          <TouchableOpacity
-            onPress={() => router.push("/settings")}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              alignSelf: "flex-start",
-              backgroundColor: "rgba(255,255,255,0.15)",
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 20,
-              marginTop: 14,
-            }}
-          >
-            <FontAwesome name="map-marker" size={12} color="#FFFFFF" />
-            <Text
-              style={{
-                fontSize: 12,
-                fontFamily: "DMSans_500Medium",
-                color: "#FFFFFF",
-                marginLeft: 6,
-              }}
-              numberOfLines={1}
-            >
-              {locationLabel}
-            </Text>
-            <FontAwesome
-              name="chevron-down"
-              size={8}
-              color="rgba(255,255,255,0.7)"
-              style={{ marginLeft: 6 }}
-            />
-          </TouchableOpacity>
 
           {/* Inline Search Bar (Worker only) */}
           {!isEmployer && (
@@ -760,105 +888,6 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* Stats Row (Employer) */}
-      {isEmployer && (
-        <View
-          style={{
-            flexDirection: "row",
-            paddingHorizontal: 20,
-            marginTop: -16,
-            gap: 10,
-          }}
-        >
-          <StatPill
-            icon="briefcase"
-            label={t("home.activeJobs")}
-            value={activeJobs}
-            iconColor="#059669"
-            colors={colors}
-            isDark={isDark}
-          />
-          <StatPill
-            icon="comments"
-            label={t("home.responses")}
-            value={totalResponses}
-            iconColor="#3B82F6"
-            colors={colors}
-            isDark={isDark}
-          />
-          <StatPill
-            icon="eye"
-            label={t("home.totalViews")}
-            value={nearbyJobs.reduce((s, j) => s + (j.view_count || 0), 0)}
-            iconColor="#F59E0B"
-            colors={colors}
-            isDark={isDark}
-          />
-        </View>
-      )}
-
-      {/* Post Job CTA (Employer, no jobs) */}
-      {isEmployer && nearbyJobs.length === 0 && (
-        <TouchableOpacity
-          onPress={() => router.push("/post-job")}
-          activeOpacity={0.8}
-          style={{
-            marginHorizontal: 20,
-            marginTop: 20,
-            borderRadius: 16,
-            overflow: "hidden",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: isDark ? "#064E3B" : "#ECFDF5",
-              padding: 20,
-              flexDirection: "row",
-              alignItems: "center",
-              borderWidth: 1,
-              borderColor: isDark
-                ? "rgba(5,150,105,0.3)"
-                : "rgba(5,150,105,0.15)",
-              borderRadius: 16,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontFamily: "DMSans_700Bold",
-                  color: "#059669",
-                }}
-              >
-                {t("home.postJob")}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontFamily: "DMSans_400Regular",
-                  color: isDark ? "rgba(5,150,105,0.7)" : "#6B7280",
-                  marginTop: 4,
-                }}
-              >
-                {t("home.getResponses")}
-              </Text>
-            </View>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 14,
-                backgroundColor: "#059669",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <FontAwesome name="plus" size={18} color="#FFFFFF" />
-            </View>
-          </View>
-        </TouchableOpacity>
-      )}
-
       {/* Section Header */}
       <View
         style={{
@@ -870,11 +899,57 @@ export default function HomeScreen() {
           marginBottom: 14,
         }}
       >
-        <Text style={{ fontSize: 18, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
-          {isEmployer ? t("home.myPostedJobs") : t("home.nearbyJobs")}
-        </Text>
+        {isEmployer ? (
+          <Text style={{ fontSize: 18, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
+            {t("home.myJobs")}
+          </Text>
+        ) : (
+          <View />
+        )}
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {/* Range filter button (worker only) */}
+          {!isEmployer && (
+            <TouchableOpacity
+              onPress={() => setRangeFilterVisible(true)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                backgroundColor: rangeIsCustom
+                  ? "#059669"
+                  : isDark
+                    ? "rgba(255,255,255,0.07)"
+                    : "rgba(0,0,0,0.05)",
+                borderWidth: 1,
+                borderColor: rangeIsCustom
+                  ? "#059669"
+                  : isDark
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.08)",
+                paddingHorizontal: 11,
+                paddingVertical: 5,
+                borderRadius: 8,
+              }}
+            >
+              <FontAwesome
+                name="map-o"
+                size={12}
+                color={rangeIsCustom ? "#FFFFFF" : colors.textSecondary}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "DMSans_600SemiBold",
+                  color: rangeIsCustom ? "#FFFFFF" : colors.textSecondary,
+                }}
+              >
+                {rangeIsCustom ? activeRangeLabel : t("home.range")}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Filter button (worker only) */}
           {!isEmployer && (
             <TouchableOpacity
@@ -897,35 +972,23 @@ export default function HomeScreen() {
                 size={12}
                 color={selectedCategories.size > 0 ? "#FFFFFF" : colors.textSecondary}
               />
-              <Text style={{
-                fontSize: 12,
-                fontFamily: "DMSans_600SemiBold",
-                color: selectedCategories.size > 0 ? "#FFFFFF" : colors.textSecondary,
-              }}>
-                {selectedCategories.size > 0 ? `${selectedCategories.size} Filter${selectedCategories.size > 1 ? "s" : ""}` : "Filter"}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "DMSans_600SemiBold",
+                  color: selectedCategories.size > 0 ? "#FFFFFF" : colors.textSecondary,
+                }}
+                numberOfLines={1}
+              >
+                {selectedCategories.size === 0
+                  ? t("home.category")
+                  : selectedCategories.size === 1
+                  ? CATEGORIES.find((c) => selectedCategories.has(c.id))?.name ?? t("home.category")
+                  : `${selectedCategories.size} ${t("home.categoriesLabel")}`}
               </Text>
             </TouchableOpacity>
           )}
 
-          {!isEmployer && nearbyJobs.length > 0 && (
-            <TouchableOpacity
-              onPress={() => router.push("/(tabs)/jobs")}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(5,150,105,0.08)",
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
-                {t("common.seeAll")}
-              </Text>
-              <FontAwesome name="chevron-right" size={9} color="#059669" style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
@@ -1043,6 +1106,228 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Range Filter Modal */}
+      <Modal
+        visible={rangeFilterVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRangeFilterVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          activeOpacity={1}
+          onPress={() => setRangeFilterVisible(false)}
+        />
+        <View
+          style={{
+            backgroundColor: isDark ? "#111827" : "#FFFFFF",
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingBottom: 32,
+            maxHeight: "75%",
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          {/* Handle */}
+          <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)",
+              }}
+            />
+          </View>
+
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingHorizontal: 20,
+              paddingVertical: 14,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
+              {t("home.filterByRange")}
+            </Text>
+            {rangeIsCustom && (
+              <TouchableOpacity
+                onPress={() => {
+                  setRangeOverride(null);
+                  setRangeFilterVisible(false);
+                  setLoading(true);
+                  fetchData(searchQuery || undefined, Array.from(selectedCategories), null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>
+                  {t("home.resetRange")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Range list */}
+          <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 20 }}>
+            {RANGE_OPTIONS.map((opt, i) => {
+              const isSelected = activeRangeValue === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => {
+                    setRangeOverride(opt.value);
+                    setRangeFilterVisible(false);
+                    setLoading(true);
+                    fetchData(
+                      searchQuery || undefined,
+                      Array.from(selectedCategories),
+                      opt.value,
+                    );
+                  }}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 13,
+                    borderBottomWidth: i < RANGE_OPTIONS.length - 1 ? 1 : 0,
+                    borderBottomColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 10,
+                        backgroundColor: `${opt.color}22`,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <FontAwesome name={opt.icon} size={15} color={opt.color} />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontFamily: "DMSans_400Regular",
+                        color: isSelected ? "#059669" : colors.textPrimary,
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      borderWidth: 2,
+                      borderColor: isSelected
+                        ? "#059669"
+                        : isDark
+                          ? "rgba(255,255,255,0.2)"
+                          : "rgba(0,0,0,0.2)",
+                      backgroundColor: isSelected ? "#059669" : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {isSelected && <FontAwesome name="check" size={11} color="#FFFFFF" />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Employer: status filter chips */}
+      {isEmployer && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
+          style={{ marginBottom: 14 }}
+        >
+          {employerStatusTabs.map((tab) => {
+            const isActive = employerStatusFilter === tab.key;
+            const count = nearbyJobs.filter(
+              (j) => (j.status || "open") === tab.key
+            ).length;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setEmployerStatusFilter(tab.key)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: isActive
+                    ? tab.color
+                    : isDark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(0,0,0,0.04)",
+                  borderWidth: 1,
+                  borderColor: isActive
+                    ? tab.color
+                    : isDark
+                      ? "rgba(255,255,255,0.08)"
+                      : "rgba(0,0,0,0.06)",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "DMSans_600SemiBold",
+                    color: isActive ? "#FFFFFF" : colors.textSecondary,
+                  }}
+                >
+                  {t(tab.labelKey)}
+                </Text>
+                {count > 0 && (
+                  <View
+                    style={{
+                      minWidth: 20,
+                      height: 18,
+                      borderRadius: 9,
+                      paddingHorizontal: 6,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: isActive
+                        ? "rgba(255,255,255,0.25)"
+                        : isDark
+                          ? "rgba(255,255,255,0.1)"
+                          : "rgba(0,0,0,0.08)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontFamily: "DMSans_700Bold",
+                        color: isActive ? "#FFFFFF" : colors.textSecondary,
+                      }}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* Job List */}
       <View style={{ paddingHorizontal: 20 }}>
         {isEmployer || nearbyJobs.length === 0 ? null : (
@@ -1068,7 +1353,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 {rangeJobs.map((job, idx) => (
-                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} distanceKm={jobDistanceKm(job, savedUserCoords)} />
                 ))}
               </>
             )}
@@ -1096,7 +1381,7 @@ export default function HomeScreen() {
                   )}
                 </View>
                 {cityJobs.map((job, idx) => (
-                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} distanceKm={jobDistanceKm(job, savedUserCoords)} />
                 ))}
               </>
             )}
@@ -1112,13 +1397,13 @@ export default function HomeScreen() {
                   <View style={{ flex: 1, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }} />
                 </View>
                 {otherJobs.map((job, idx) => (
-                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} />
+                  <JobCard key={job.id} job={job} index={idx} onPress={() => router.push(`/job/${job.id}`)} colors={colors} isDark={isDark} t={t} distanceKm={jobDistanceKm(job, savedUserCoords)} />
                 ))}
               </>
             )}
           </>
         )}
-        {nearbyJobs.length === 0 ? (
+        {(isEmployer ? filteredEmployerJobs.length : nearbyJobs.length) === 0 ? (
           <View
             style={{
               backgroundColor: colors.bgSurface,
@@ -1157,9 +1442,15 @@ export default function HomeScreen() {
                 color: colors.textTertiary,
               }}
             >
-              {isEmployer ? t("home.noPostedJobs") : t("home.noJobs")}
+              {isEmployer
+                ? nearbyJobs.length === 0
+                  ? t("home.noPostedJobs")
+                  : t("home.noJobsForStatus", {
+                      status: t(`jobs.${employerStatusFilter}`),
+                    })
+                : t("home.noJobs")}
             </Text>
-            {isEmployer && (
+            {isEmployer && nearbyJobs.length === 0 && (
               <TouchableOpacity
                 onPress={() => router.push("/post-job")}
                 activeOpacity={0.7}
@@ -1184,7 +1475,7 @@ export default function HomeScreen() {
             )}
           </View>
         ) : isEmployer ? (
-          nearbyJobs.map((job, idx) => (
+          filteredEmployerJobs.map((job, idx) => (
             <JobCard
               key={job.id}
               job={job}
@@ -1193,10 +1484,56 @@ export default function HomeScreen() {
               colors={colors}
               isDark={isDark}
               t={t}
+              showStatus
             />
           ))
         ) : null}
       </View>
     </ScrollView>
+
+      {refreshing && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: Platform.OS === "ios" ? 52 : 12,
+            zIndex: 20,
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: isDark ? "rgba(15,23,42,0.94)" : "rgba(255,255,255,0.97)",
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDark ? 0.35 : 0.1,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+          >
+            <ActivityIndicator size="small" color="#059669" />
+            <Text
+              style={{
+                marginLeft: 10,
+                fontSize: 13,
+                fontFamily: "DMSans_500Medium",
+                color: colors.textSecondary,
+              }}
+            >
+              {t("common.refreshing")}
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }

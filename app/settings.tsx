@@ -135,9 +135,8 @@ function SettingRow({
           color={danger ? "#EF4444" : iconColor || "#059669"}
         />
       </View>
-      <View style={{ flex: 1, marginRight: 8 }}>
+      <View style={{ flex: 1 }}>
         <Text
-          numberOfLines={1}
           style={{
             fontSize: 15,
             fontFamily: "DMSans_500Medium",
@@ -149,14 +148,11 @@ function SettingRow({
       </View>
       {value && (
         <Text
-          numberOfLines={1}
           style={{
             fontSize: 13,
             fontFamily: "DMSans_400Regular",
             color: subtextColor,
             marginRight: 6,
-            flexShrink: 0,
-            maxWidth: "45%",
           }}
         >
           {value}
@@ -265,7 +261,6 @@ export default function SettingsScreen() {
     { label: "2–5 km", value: 5 },
     { label: "5–10 km", value: 10 },
     { label: "10–20 km", value: 20 },
-    { label: "20+ km", value: 50 },
     { label: t("settings.inMyCity"), value: 0 },
   ];
 

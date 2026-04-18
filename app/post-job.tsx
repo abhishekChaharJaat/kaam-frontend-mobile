@@ -12,11 +12,11 @@ import {
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
+import { useThemeStore } from "@/store/theme";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/lib/toast";
@@ -59,11 +59,9 @@ const BUDGET_TYPES = [
 
 
 const URGENCY_OPTIONS = [
-  { key: "urgent", labelKey: "jobs.urgent", icon: "bolt", color: "#EF4444" },
   { key: "today", labelKey: "jobs.today", icon: "clock-o", color: "#F59E0B" },
   { key: "tomorrow", labelKey: "jobs.tomorrow", icon: "calendar-o", color: "#3B82F6" },
-  { key: "this_week", labelKey: "jobs.thisWeek", icon: "calendar", color: "#8B5CF6" },
-  { key: "flexible", labelKey: "jobs.flexible", icon: "check-circle", color: "#10B981" },
+  { key: "custom", labelKey: "jobs.custom", icon: "calendar", color: "#8B5CF6" },
 ] as const;
 
 const STEPS = [
@@ -79,9 +77,13 @@ export default function PostJob() {
   const [categoryId, setCategoryId] = useState("");
   const [budgetType, setBudgetType] = useState("negotiable");
   const [budgetMin, setBudgetMin] = useState("");
-  const [budgetMax, setBudgetMax] = useState("");
-  const [urgency, setUrgency] = useState("flexible");
-  const [requiredDate, setRequiredDate] = useState<Date | null>(null);
+  const [urgency, setUrgency] = useState("today");
+  const [requiredDate, setRequiredDate] = useState<Date | null>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [requiredDateEnd, setRequiredDateEnd] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
   const [loading, setLoading] = useState(false);
   const { getToken } = useAuth();
@@ -91,7 +93,6 @@ export default function PostJob() {
   const { t } = useTranslation();
   const { showToast } = useToast();
 
-  const insets = useSafeAreaInsets();
   const progressAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -129,10 +130,23 @@ export default function PostJob() {
 
   const canProceedStep1 = title.trim().length > 0 && categoryId.length > 0;
 
+  const isValidBudgetAmount = (raw: string) => {
+    const n = parseInt(raw.trim(), 10);
+    return !Number.isNaN(n) && n > 0;
+  };
+
+  const canProceedStep2 =
+    budgetType === "discuss" || isValidBudgetAmount(budgetMin);
+
   const handlePost = async () => {
+    if (budgetType !== "discuss" && !isValidBudgetAmount(budgetMin)) {
+      showToast(t("jobs.budgetRequired"), "error");
+      return;
+    }
     setLoading(true);
     try {
       const token = await getToken();
+      const n = budgetType === "discuss" ? null : parseInt(budgetMin.trim(), 10);
       await api("/jobs", {
         method: "POST",
         token,
@@ -141,12 +155,16 @@ export default function PostJob() {
           description: description.trim(),
           category_id: categoryId,
           budget_type: budgetType,
-          budget_min: budgetMin ? parseInt(budgetMin) : undefined,
-          budget_max: budgetMax ? parseInt(budgetMax) : undefined,
+          budget_min: n != null && !Number.isNaN(n) ? n : undefined,
+          budget_max: n != null && !Number.isNaN(n) ? n : undefined,
           urgency,
           required_date: requiredDate
             ? requiredDate.toISOString().split("T")[0]
             : undefined,
+          required_date_end:
+            urgency === "custom" && requiredDateEnd
+              ? requiredDateEnd.toISOString().split("T")[0]
+              : undefined,
         },
       });
       showToast(t("jobs.jobLiveMessage"), "success");
@@ -166,11 +184,7 @@ export default function PostJob() {
 
   const formatBudget = () => {
     if (budgetType === "discuss") return t("jobs.discuss");
-    if (budgetType === "negotiable" && !budgetMin && !budgetMax) return t("jobs.negotiable");
-    const parts = [];
-    if (budgetMin) parts.push(`₹${budgetMin}`);
-    if (budgetMax) parts.push(`₹${budgetMax}`);
-    return parts.join(" – ") || t("jobs.negotiable");
+    return `₹${budgetMin.trim()}`;
   };
 
   const progressWidth = progressAnim.interpolate({
@@ -247,12 +261,12 @@ export default function PostJob() {
               setBudgetType={setBudgetType}
               budgetMin={budgetMin}
               setBudgetMin={setBudgetMin}
-              budgetMax={budgetMax}
-              setBudgetMax={setBudgetMax}
               urgency={urgency}
               setUrgency={setUrgency}
               requiredDate={requiredDate}
               setRequiredDate={setRequiredDate}
+              requiredDateEnd={requiredDateEnd}
+              setRequiredDateEnd={setRequiredDateEnd}
             />
           )}
           {step === 3 && (
@@ -264,6 +278,8 @@ export default function PostJob() {
               formatBudget={formatBudget}
               selectedUrgency={selectedUrgency}
               requiredDate={requiredDate}
+              requiredDateEnd={requiredDateEnd}
+              urgency={urgency}
               location={location}
             />
           )}
@@ -272,31 +288,42 @@ export default function PostJob() {
       </Animated.View>
 
       {/* Bottom action */}
-      <View
-        className="px-5 pt-4 border-t border-border bg-bg-base"
-        style={{ paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 16) + 8 : 32 }}
-      >
+      <View className="px-5 pb-8 pt-4 border-t border-border bg-bg-base">
         {step < 3 ? (
           <TouchableOpacity
             className="rounded-full py-4 items-center"
             style={{
-              backgroundColor: (step === 1 && !canProceedStep1) ? "#D1D5DB" : "#059669",
+              backgroundColor:
+                (step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)
+                  ? "#D1D5DB"
+                  : "#059669",
             }}
             onPress={() => animateStep(step + 1)}
-            disabled={step === 1 && !canProceedStep1}
+            disabled={
+              (step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)
+            }
             activeOpacity={0.8}
           >
             <View className="flex-row items-center">
               <Text
                 className="text-body-lg font-sans-semibold mr-2"
-                style={{ color: (step === 1 && !canProceedStep1) ? "#6B7280" : "#FFF" }}
+                style={{
+                  color:
+                    (step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)
+                      ? "#6B7280"
+                      : "#FFF",
+                }}
               >
                 {t("common.continue")}
               </Text>
               <FontAwesome
                 name="arrow-right"
                 size={14}
-                color={(step === 1 && !canProceedStep1) ? "#6B7280" : "#FFF"}
+                color={
+                  (step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)
+                    ? "#6B7280"
+                    : "#FFF"
+                }
               />
             </View>
           </TouchableOpacity>
@@ -592,9 +619,9 @@ function StepTwo({
   description, setDescription,
   budgetType, setBudgetType,
   budgetMin, setBudgetMin,
-  budgetMax, setBudgetMax,
   urgency, setUrgency,
   requiredDate, setRequiredDate,
+  requiredDateEnd, setRequiredDateEnd,
 }: {
   t: (key: string) => string;
   description: string;
@@ -603,15 +630,17 @@ function StepTwo({
   setBudgetType: (v: string) => void;
   budgetMin: string;
   setBudgetMin: (v: string) => void;
-  budgetMax: string;
-  setBudgetMax: (v: string) => void;
   urgency: string;
   setUrgency: (v: string) => void;
   requiredDate: Date | null;
   setRequiredDate: (d: Date | null) => void;
+  requiredDateEnd: Date | null;
+  setRequiredDateEnd: (d: Date | null) => void;
 }) {
-  const [showIOSPicker, setShowIOSPicker] = useState(false);
+  const [iosPickerTarget, setIosPickerTarget] = useState<"start" | "end" | null>(null);
   const colors = useThemeColors();
+  const theme = useThemeStore((s) => s.theme);
+  const isDark = theme === "dark";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -622,30 +651,45 @@ function StepTwo({
     setUrgency(key);
     if (key === "today") {
       setRequiredDate(new Date(today));
+      setRequiredDateEnd(null);
     } else if (key === "tomorrow") {
       setRequiredDate(new Date(tomorrow));
+      setRequiredDateEnd(null);
+    } else if (key === "custom") {
+      setRequiredDateEnd(null);
     }
   };
 
-  const openDatePicker = () => {
+  const openDatePicker = (target: "start" | "end") => {
+    const current =
+      target === "start"
+        ? requiredDate || today
+        : requiredDateEnd || requiredDate || today;
+    const minDate =
+      target === "end" && requiredDate ? requiredDate : today;
+
     if (Platform.OS === "android") {
       DateTimePickerAndroid.open({
-        value: requiredDate || today,
+        value: current,
         mode: "date",
-        minimumDate: today,
+        minimumDate: minDate,
         onChange: (event, date) => {
           if (event.type === "set" && date) {
             const d = new Date(date);
             d.setHours(0, 0, 0, 0);
-            setRequiredDate(d);
-            if (d.getTime() === today.getTime()) setUrgency("today");
-            else if (d.getTime() === tomorrow.getTime()) setUrgency("tomorrow");
-            else setUrgency("flexible");
+            if (target === "start") {
+              setRequiredDate(d);
+              if (requiredDateEnd && requiredDateEnd.getTime() < d.getTime()) {
+                setRequiredDateEnd(null);
+              }
+            } else {
+              setRequiredDateEnd(d);
+            }
           }
         },
       });
     } else {
-      setShowIOSPicker(true);
+      setIosPickerTarget(target);
     }
   };
 
@@ -682,7 +726,10 @@ function StepTwo({
                 ? "bg-primary/10 border-primary"
                 : "bg-bg-surface border-border"
             }`}
-            onPress={() => setBudgetType(bt.key)}
+            onPress={() => {
+              setBudgetType(bt.key);
+              if (bt.key === "discuss") setBudgetMin("");
+            }}
             activeOpacity={0.7}
           >
             <View
@@ -710,29 +757,16 @@ function StepTwo({
         ))}
 
         {budgetType !== "discuss" && (
-          <View className="flex-row mt-2">
-            <View className="flex-1 mr-2">
-              <Text className="text-caption text-text-tertiary mb-1">{t("jobs.min")}</Text>
-              <TextInput
-                className="bg-bg-surface border border-border rounded-full px-4 py-3.5 text-body text-text-primary text-center"
-                value={budgetMin}
-                onChangeText={setBudgetMin}
-                keyboardType="numeric"
-                placeholder="200"
-                placeholderTextColor="#4B5563"
-              />
-            </View>
-            <View className="flex-1 ml-2">
-              <Text className="text-caption text-text-tertiary mb-1">{t("jobs.max")}</Text>
-              <TextInput
-                className="bg-bg-surface border border-border rounded-full px-4 py-3.5 text-body text-text-primary text-center"
-                value={budgetMax}
-                onChangeText={setBudgetMax}
-                keyboardType="numeric"
-                placeholder="800"
-                placeholderTextColor="#4B5563"
-              />
-            </View>
+          <View className="mt-2">
+            <Text className="text-caption text-text-tertiary mb-1">{t("jobs.budgetAmount")}</Text>
+            <TextInput
+              className="bg-bg-surface border border-border rounded-full px-4 py-3.5 text-body text-text-primary"
+              value={budgetMin}
+              onChangeText={setBudgetMin}
+              keyboardType="numeric"
+              placeholder={t("jobs.budgetExamplePlaceholder")}
+              placeholderTextColor="#4B5563"
+            />
           </View>
         )}
       </View>
@@ -772,85 +806,182 @@ function StepTwo({
           ))}
         </View>
 
-        {/* Selected date display / pick date button */}
-        <TouchableOpacity
-          onPress={openDatePicker}
-          activeOpacity={0.7}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: colors.bgSurface,
-            borderWidth: 1.5,
-            borderColor: requiredDate ? "#059669" : colors.border,
-            borderRadius: 999,
-            paddingHorizontal: 16,
-            paddingVertical: 13,
-          }}
-        >
-          <FontAwesome
-            name="calendar"
-            size={15}
-            color={requiredDate ? "#059669" : "#6B7280"}
-            style={{ marginRight: 10 }}
-          />
-          <Text
+        {/* Today / Tomorrow: show read-only auto-selected date */}
+        {(urgency === "today" || urgency === "tomorrow") && requiredDate && (
+          <View
             style={{
-              flex: 1,
-              fontSize: 15,
-              fontFamily: requiredDate ? "DMSans_600SemiBold" : "DMSans_400Regular",
-              color: requiredDate ? colors.textPrimary : "#6B7280",
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: colors.bgSurface,
+              borderWidth: 1.5,
+              borderColor: "#059669",
+              borderRadius: 999,
+              paddingHorizontal: 16,
+              paddingVertical: 13,
             }}
           >
-            {requiredDate ? formatDate(requiredDate) : "Pick a date (optional)"}
-          </Text>
-          {requiredDate ? (
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); setRequiredDate(null); setUrgency("flexible"); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            <FontAwesome name="calendar" size={15} color="#059669" style={{ marginRight: 10 }} />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 15,
+                fontFamily: "DMSans_600SemiBold",
+                color: colors.textPrimary,
+              }}
             >
-              <FontAwesome name="times-circle" size={16} color="#6B7280" />
+              {formatDate(requiredDate)}
+            </Text>
+          </View>
+        )}
+
+        {/* Custom: start + end date pickers */}
+        {urgency === "custom" && (
+          <View>
+            <TouchableOpacity
+              onPress={() => openDatePicker("start")}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.bgSurface,
+                borderWidth: 1.5,
+                borderColor: requiredDate ? "#059669" : colors.border,
+                borderRadius: 999,
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                marginBottom: 10,
+              }}
+            >
+              <FontAwesome
+                name="calendar"
+                size={15}
+                color={requiredDate ? "#059669" : "#6B7280"}
+                style={{ marginRight: 10 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "DMSans_500Medium",
+                    color: "#6B7280",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {t("jobs.startDate")}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontFamily: requiredDate ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                    color: requiredDate ? colors.textPrimary : "#6B7280",
+                    marginTop: 2,
+                  }}
+                >
+                  {requiredDate ? formatDate(requiredDate) : t("jobs.pickStartDate")}
+                </Text>
+              </View>
+              <FontAwesome name="chevron-right" size={13} color="#6B7280" />
             </TouchableOpacity>
-          ) : (
-            <FontAwesome name="chevron-right" size={13} color="#6B7280" />
-          )}
-        </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => openDatePicker("end")}
+              activeOpacity={0.7}
+              disabled={!requiredDate}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.bgSurface,
+                borderWidth: 1.5,
+                borderColor: requiredDateEnd ? "#059669" : colors.border,
+                borderRadius: 999,
+                paddingHorizontal: 16,
+                paddingVertical: 13,
+                opacity: requiredDate ? 1 : 0.5,
+              }}
+            >
+              <FontAwesome
+                name="calendar-check-o"
+                size={15}
+                color={requiredDateEnd ? "#059669" : "#6B7280"}
+                style={{ marginRight: 10 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "DMSans_500Medium",
+                    color: "#6B7280",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {t("jobs.endDate")}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontFamily: requiredDateEnd ? "DMSans_600SemiBold" : "DMSans_400Regular",
+                    color: requiredDateEnd ? colors.textPrimary : "#6B7280",
+                    marginTop: 2,
+                  }}
+                >
+                  {requiredDateEnd ? formatDate(requiredDateEnd) : t("jobs.pickEndDate")}
+                </Text>
+              </View>
+              <FontAwesome name="chevron-right" size={13} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* iOS date picker modal */}
       {Platform.OS === "ios" && (
         <Modal
-          visible={showIOSPicker}
+          visible={iosPickerTarget !== null}
           transparent
           animationType="slide"
-          onRequestClose={() => setShowIOSPicker(false)}
+          onRequestClose={() => setIosPickerTarget(null)}
         >
           <TouchableOpacity
             style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
             activeOpacity={1}
-            onPress={() => setShowIOSPicker(false)}
+            onPress={() => setIosPickerTarget(null)}
           />
           <View style={{ backgroundColor: colors.bgBase, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-              <TouchableOpacity onPress={() => setShowIOSPicker(false)}>
+              <TouchableOpacity onPress={() => setIosPickerTarget(null)}>
                 <Text style={{ fontSize: 16, fontFamily: "DMSans_400Regular", color: "#6B7280" }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowIOSPicker(false)}>
+              <TouchableOpacity onPress={() => setIosPickerTarget(null)}>
                 <Text style={{ fontSize: 16, fontFamily: "DMSans_600SemiBold", color: "#059669" }}>Done</Text>
               </TouchableOpacity>
             </View>
             <DateTimePicker
-              value={requiredDate || today}
+              value={
+                iosPickerTarget === "start"
+                  ? requiredDate || today
+                  : requiredDateEnd || requiredDate || today
+              }
               mode="date"
               display="spinner"
-              minimumDate={today}
+              themeVariant={isDark ? "dark" : "light"}
+              textColor={colors.textPrimary}
+              minimumDate={
+                iosPickerTarget === "end" && requiredDate ? requiredDate : today
+              }
               onChange={(_, date) => {
                 if (date) {
                   const d = new Date(date);
                   d.setHours(0, 0, 0, 0);
-                  setRequiredDate(d);
-                  if (d.getTime() === today.getTime()) setUrgency("today");
-                  else if (d.getTime() === tomorrow.getTime()) setUrgency("tomorrow");
-                  else setUrgency("flexible");
+                  if (iosPickerTarget === "start") {
+                    setRequiredDate(d);
+                    if (requiredDateEnd && requiredDateEnd.getTime() < d.getTime()) {
+                      setRequiredDateEnd(null);
+                    }
+                  } else if (iosPickerTarget === "end") {
+                    setRequiredDateEnd(d);
+                  }
                 }
               }}
             />
@@ -863,7 +994,7 @@ function StepTwo({
 
 function StepThree({
   t,
-  title, description, selectedCategory, formatBudget, selectedUrgency, requiredDate, location,
+  title, description, selectedCategory, formatBudget, selectedUrgency, requiredDate, requiredDateEnd, urgency, location,
 }: {
   t: (key: string) => string;
   title: string;
@@ -872,8 +1003,20 @@ function StepThree({
   formatBudget: () => string;
   selectedUrgency?: (typeof URGENCY_OPTIONS)[number];
   requiredDate: Date | null;
+  requiredDateEnd: Date | null;
+  urgency: string;
   location: { latitude?: number; longitude?: number; city?: string; locality?: string; state?: string } | null;
 }) {
+  const whenValue = (() => {
+    if (urgency === "custom" && requiredDate) {
+      return requiredDateEnd
+        ? `${formatDate(requiredDate)} – ${formatDate(requiredDateEnd)}`
+        : formatDate(requiredDate);
+    }
+    if (requiredDate) return formatDate(requiredDate);
+    if (selectedUrgency) return t(selectedUrgency.labelKey);
+    return t("jobs.flexible");
+  })();
   return (
     <View>
       <Text className="text-body-sm text-text-secondary font-sans-semibold mb-4 uppercase tracking-wider">
@@ -901,7 +1044,7 @@ function StepThree({
           <ReviewRow
             icon="calendar"
             label={t("jobs.whenNeeded")}
-            value={requiredDate ? formatDate(requiredDate) : (selectedUrgency ? t(selectedUrgency.labelKey) : t("jobs.flexible"))}
+            value={whenValue}
             valueColor={requiredDate ? "#059669" : selectedUrgency?.color}
           />
           {location?.city && (

@@ -1,25 +1,28 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
+  ActivityIndicator,
   RefreshControl,
   Animated,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
 import { useTranslation } from "react-i18next";
 import { useThemeColors } from "@/lib/useThemeColors";
+import { useChatUnread } from "@/contexts/ChatUnreadContext";
 
 interface Conversation {
   id: string;
   job_id: string;
   job_title?: string;
+  job_status?: string;
   poster_user_id: string;
   poster_name?: string;
   responder_user_id: string;
@@ -31,6 +34,9 @@ interface Conversation {
   is_assigned: boolean;
   is_disabled: boolean;
 }
+
+const EMPLOYER_STATUS_TABS = ["open", "assigned", "completed", "hidden"] as const;
+type EmployerStatusTab = (typeof EMPLOYER_STATUS_TABS)[number];
 
 const AVATAR_COLORS = [
   "#059669", "#3B82F6", "#8B5CF6", "#EC4899",
@@ -255,72 +261,58 @@ function ConversationCard({
             )}
           </View>
 
-          {item.is_assigned && (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 4,
-              }}
-            >
-              <FontAwesome name="check-circle" size={10} color="#10B981" />
-              <Text
+          {(() => {
+            const isCompleted = item.job_status === "completed";
+            const isCancelled = item.job_status === "cancelled";
+            const isHidden = item.job_status === "hidden";
+            if (!item.is_assigned && !isCompleted && !isCancelled && !isHidden)
+              return null;
+
+            const badgeColor = isCompleted
+              ? "#059669"
+              : isCancelled
+              ? "#DC2626"
+              : isHidden
+              ? "#6B7280"
+              : "#10B981";
+            const badgeIcon = isCancelled
+              ? "times-circle"
+              : isHidden
+              ? "eye-slash"
+              : "check-circle";
+            const badgeText = isCompleted
+              ? t("jobs.completed")
+              : isCancelled
+              ? t("jobs.cancelled")
+              : isHidden
+              ? t("jobs.hidden")
+              : t("chat.assignedLabel");
+
+            return (
+              <View
                 style={{
-                  fontSize: 11,
-                  fontFamily: "DMSans_500Medium",
-                  color: "#10B981",
-                  marginLeft: 4,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 4,
                 }}
               >
-                {t("chat.assignedLabel")}
-              </Text>
-            </View>
-          )}
+                <FontAwesome name={badgeIcon} size={10} color={badgeColor} />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "DMSans_500Medium",
+                    color: badgeColor,
+                    marginLeft: 4,
+                  }}
+                >
+                  {badgeText}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
       </TouchableOpacity>
     </Animated.View>
-  );
-}
-
-function ChatSkeleton({ colors, isDark }: { colors: ReturnType<typeof useThemeColors>; isDark: boolean }) {
-  const shimmer = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
-  const barColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
-
-  const SkeletonRow = () => (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14 }}>
-      <Animated.View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: barColor, opacity }} />
-      <View style={{ flex: 1, marginLeft: 14 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Animated.View style={{ width: 120, height: 14, borderRadius: 7, backgroundColor: barColor, opacity }} />
-          <Animated.View style={{ width: 28, height: 10, borderRadius: 5, backgroundColor: barColor, opacity }} />
-        </View>
-        <Animated.View style={{ width: 180, height: 12, borderRadius: 6, backgroundColor: barColor, opacity, marginTop: 8 }} />
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={{ flex: 1 }}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <View key={i}>
-          <SkeletonRow />
-          {i < 7 && (
-            <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", marginLeft: 84, marginRight: 20 }} />
-          )}
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -339,7 +331,16 @@ export default function ChatList() {
   const [activeTab, setActiveTab] = useState<"poster" | "responder">(
     "responder"
   );
+  const [employerStatusTab, setEmployerStatusTab] =
+    useState<EmployerStatusTab>("open");
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const { refresh: refreshUnreadBadge } = useChatUnread();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUnreadBadge();
+    }, [refreshUnreadBadge])
+  );
 
   useEffect(() => {
     (async () => {
@@ -364,6 +365,7 @@ export default function ChatList() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      void refreshUnreadBadge();
     }
   };
 
@@ -395,6 +397,12 @@ export default function ChatList() {
       ? conv.unread_count_poster
       : conv.unread_count_responder;
   };
+
+  const visibleConversations = isEmployer
+    ? conversations.filter(
+        (c) => (c.job_status || "open") === employerStatusTab
+      )
+    : conversations;
 
   const renderConversation = ({
     item,
@@ -431,11 +439,53 @@ export default function ChatList() {
             fontSize: 28,
             fontFamily: "DMSans_700Bold",
             color: colors.textPrimary,
-            marginBottom: isEmployer ? 0 : 14,
+            marginBottom: 14,
           }}
         >
           {t("chat.chats")}
         </Text>
+
+        {/* Status tabs (employer only) */}
+        {isEmployer && (
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+            }}
+          >
+            {EMPLOYER_STATUS_TABS.map((tab) => {
+              const isActive = employerStatusTab === tab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  onPress={() => setEmployerStatusTab(tab)}
+                  activeOpacity={0.7}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: isActive
+                      ? "#059669"
+                      : isDark
+                        ? "rgba(255,255,255,0.06)"
+                        : "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontFamily: "DMSans_600SemiBold",
+                      color: isActive ? "#FFFFFF" : colors.textSecondary,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {t(`jobs.${tab}`)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Segmented Control (worker only) */}
         {!isEmployer && (
@@ -489,10 +539,14 @@ export default function ChatList() {
 
       {/* Content */}
       {loading ? (
-        <ChatSkeleton colors={colors} isDark={isDark} />
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={visibleConversations}
           renderItem={renderConversation}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{

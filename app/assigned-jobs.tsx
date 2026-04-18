@@ -73,16 +73,17 @@ function JobCard({
   }, []);
 
   const urgency = URGENCY_CONFIG[job.urgency] || URGENCY_CONFIG.flexible;
-  const budgetLabel =
-    job.budget_type === "negotiable"
-      ? t("jobs.negotiable")
-      : job.budget_type === "discuss"
-        ? t("jobs.discuss")
-        : job.budget_min && job.budget_max
-          ? `₹${job.budget_min} - ₹${job.budget_max}`
-          : job.budget_min
-            ? `₹${job.budget_min}+`
-            : null;
+  const budgetLabel = (() => {
+    if (job.budget_type === "discuss") return t("jobs.discuss");
+    if (job.budget_min != null && job.budget_max != null) {
+      if (job.budget_min === job.budget_max) return `₹${job.budget_min}`;
+      return `₹${job.budget_min} - ₹${job.budget_max}`;
+    }
+    if (job.budget_min != null) return `₹${job.budget_min}+`;
+    if (job.budget_type === "negotiable") return t("jobs.negotiable");
+    if (job.budget_type === "fixed") return t("jobs.fixedPrice");
+    return null;
+  })();
 
   const location = [job.locality, job.city].filter(Boolean).join(", ");
 

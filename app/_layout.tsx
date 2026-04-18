@@ -21,6 +21,7 @@ import { tokenCache } from "@/lib/clerk-token-cache";
 import { useThemeStore } from "@/store/theme";
 import { useUserStore } from "@/store/user";
 import { ToastProvider } from "@/lib/toast";
+import { ChatUnreadProvider } from "@/contexts/ChatUnreadContext";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -116,22 +117,24 @@ export default function RootLayout() {
             backgroundColor={isDark ? "#0A0F1A" : "#F8FAFC"}
           />
           <ToastProvider isDark={isDark}>
-            <ThemeProvider
-              value={{
-                ...DefaultTheme,
-                dark: isDark,
-                colors: navColors,
-              }}
-            >
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  gestureEnabled: true,
-                  gestureDirection: "horizontal",
-                  animation: "slide_from_right",
+            <ChatUnreadProvider>
+              <ThemeProvider
+                value={{
+                  ...DefaultTheme,
+                  dark: isDark,
+                  colors: navColors,
                 }}
-              />
-            </ThemeProvider>
+              >
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    gestureEnabled: true,
+                    gestureDirection: "horizontal",
+                    animation: "slide_from_right",
+                  }}
+                />
+              </ThemeProvider>
+            </ChatUnreadProvider>
           </ToastProvider>
         </View>
         </SafeAreaProvider>

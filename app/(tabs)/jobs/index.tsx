@@ -52,12 +52,20 @@ export default function JobsFeed() {
     fetchJobs();
   }, []);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchJobs();
+  };
+
   const formatBudget = (job: Job) => {
-    if (job.budget_type === "negotiable") return t("jobs.negotiable");
     if (job.budget_type === "discuss") return t("jobs.discuss");
-    if (job.budget_min && job.budget_max)
+    if (job.budget_min != null && job.budget_max != null) {
+      if (job.budget_min === job.budget_max) return `₹${job.budget_min}`;
       return `₹${job.budget_min} - ₹${job.budget_max}`;
-    if (job.budget_min) return `₹${job.budget_min}+`;
+    }
+    if (job.budget_min != null) return `₹${job.budget_min}+`;
+    if (job.budget_type === "negotiable") return t("jobs.negotiable");
+    if (job.budget_type === "fixed") return t("jobs.fixedPrice");
     return "";
   };
 
@@ -125,36 +133,29 @@ export default function JobsFeed() {
   );
 
   return (
-    <View className="flex-1 bg-bg-base">
-      <View className="flex-row justify-between items-center px-5 pt-14 pb-4">
-        <Text className="text-h1 text-text-primary font-sans-bold">
+    <View className="flex-1 bg-bg-base pt-12">
+      <View className="flex-row justify-between items-center px-5 mb-4">
+        <Text className="text-h3 text-text-primary font-sans-bold">
           {t("jobs.nearbyJobs")}
         </Text>
-        <TouchableOpacity
-          className="w-10 h-10 bg-bg-surface border border-border rounded-lg items-center justify-center"
-        >
-          <FontAwesome name="sliders" size={16} color="#9CA3AF" />
-        </TouchableOpacity>
       </View>
 
       <FlatList
         data={jobs}
         renderItem={renderJob}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); fetchJobs(); }}
+            onRefresh={onRefresh}
             tintColor="#059669"
           />
         }
+        contentContainerStyle={{ paddingBottom: 120 }}
         ListEmptyComponent={
           <View className="items-center py-16">
-            <View className="bg-bg-surface w-16 h-16 rounded-full items-center justify-center mb-4">
-              <FontAwesome name="briefcase" size={24} color="#4B5563" />
-            </View>
-            <Text className="text-body text-text-tertiary">
+            <FontAwesome name="briefcase" size={40} color="#9CA3AF" />
+            <Text className="text-body text-text-secondary mt-3">
               {t("jobs.noJobsNearby")}
             </Text>
           </View>

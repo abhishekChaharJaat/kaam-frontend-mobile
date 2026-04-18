@@ -13,6 +13,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { api } from "@/lib/api";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
+import { RateWorkerModal } from "@/components/RateWorkerModal";
 
 interface Job {
   id: string;
@@ -22,7 +23,13 @@ interface Job {
   city?: string;
   locality?: string;
   conversation_count: number;
+  assigned_to_user_id?: string | null;
   created_at: string;
+}
+
+interface RateTarget {
+  jobId: string;
+  revieweeUserId: string;
 }
 
 const STATUS_TABS = ["open", "assigned", "completed", "cancelled"];
@@ -31,6 +38,7 @@ export default function MyJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("open");
+  const [rateTarget, setRateTarget] = useState<RateTarget | null>(null);
   const { getToken } = useAuth();
   const router = useRouter();
   const colors = useThemeColors();
@@ -48,7 +56,7 @@ export default function MyJobs() {
     }
   };
 
-  const handleMarkComplete = (jobId: string, jobTitle: string) => {
+  const handleMarkComplete = (job: Job) => {
     Alert.alert(
       t("chat.markCompleteConfirmTitle"),
       t("chat.markCompleteConfirmMsg"),
@@ -60,8 +68,14 @@ export default function MyJobs() {
           onPress: async () => {
             try {
               const token = await getToken();
-              await api(`/jobs/${jobId}/complete`, { method: "POST", token });
-              setJobs((prev) => prev.filter((j) => j.id !== jobId));
+              await api(`/jobs/${job.id}/complete`, { method: "POST", token });
+              setJobs((prev) => prev.filter((j) => j.id !== job.id));
+              if (job.assigned_to_user_id) {
+                setRateTarget({
+                  jobId: job.id,
+                  revieweeUserId: job.assigned_to_user_id,
+                });
+              }
             } catch {}
           },
         },
@@ -112,7 +126,7 @@ export default function MyJobs() {
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
-              handleMarkComplete(item.id, item.title);
+              handleMarkComplete(item);
             }}
             style={{
               flexDirection: "row",
@@ -180,6 +194,15 @@ export default function MyJobs() {
               </Text>
             </View>
           }
+        />
+      )}
+
+      {rateTarget && (
+        <RateWorkerModal
+          visible={!!rateTarget}
+          jobId={rateTarget.jobId}
+          revieweeUserId={rateTarget.revieweeUserId}
+          onClose={() => setRateTarget(null)}
         />
       )}
     </View>

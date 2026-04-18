@@ -16,6 +16,7 @@ import { useUserStore } from "@/store/user";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { useChatUnread } from "@/contexts/ChatUnreadContext";
 
 const TAB_ICONS: Record<string, React.ComponentProps<typeof FontAwesome>["name"]> = {
   index: "home",
@@ -67,7 +68,18 @@ function isNestedScreenActive(state: BottomTabBarProps["state"]): boolean {
   return false;
 }
 
-function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function getAndroidBottom(bottomInset: number): number {
+  if (bottomInset === 0) return 16;          // physical / capacitive buttons
+  if (bottomInset < 30) return bottomInset + 8; // gesture navigation
+  return bottomInset;                        // 3-button software nav bar
+}
+
+function FloatingTabBar({
+  state,
+  descriptors,
+  navigation,
+  chatsUnreadTotal = 0,
+}: BottomTabBarProps & { chatsUnreadTotal?: number }) {
   const colors = useThemeColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -84,33 +96,14 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const hasFab = visibleRoutes.some((r) => r.name === "jobs");
 
-  const isAndroid = Platform.OS === "android";
-
   return (
     <View
-      style={
-        isAndroid
-          ? {
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              paddingBottom: insets.bottom,
-              backgroundColor: colors.bgSurface,
-              borderTopWidth: 1,
-              borderTopColor:
-                colors.bgBase === "#0A0F1A"
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(0,0,0,0.08)",
-              elevation: 8,
-            }
-          : {
-              position: "absolute",
-              bottom: 24,
-              left: 16,
-              right: 16,
-            }
-      }
+      style={{
+        position: "absolute",
+        bottom: Platform.OS === "ios" ? 24 : getAndroidBottom(insets.bottom),
+        left: 16,
+        right: 16,
+      }}
     >
       <View
         style={{
@@ -118,23 +111,19 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           alignItems: "center",
           justifyContent: "space-around",
           backgroundColor: colors.bgSurface,
-          borderRadius: isAndroid ? 0 : 28,
+          borderRadius: 28,
           height: 64,
           paddingHorizontal: 8,
-          ...(isAndroid
-            ? {}
-            : {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: colors.bgBase === "#0A0F1A" ? 0.5 : 0.12,
-                shadowRadius: 24,
-                elevation: 16,
-                borderWidth: 1,
-                borderColor:
-                  colors.bgBase === "#0A0F1A"
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.04)",
-              }),
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: colors.bgBase === "#0A0F1A" ? 0.5 : 0.12,
+          shadowRadius: 24,
+          elevation: 16,
+          borderWidth: 1,
+          borderColor:
+            colors.bgBase === "#0A0F1A"
+              ? "rgba(255,255,255,0.06)"
+              : "rgba(0,0,0,0.04)",
         }}
       >
         {visibleRoutes.map((route) => {
@@ -206,11 +195,42 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               }}
             >
               <View style={{ alignItems: "center", gap: 3 }}>
-                <AnimatedTabIcon
-                  name={iconName ?? "circle"}
-                  focused={isFocused}
-                  color={color}
-                />
+                <View style={{ position: "relative" }}>
+                  <AnimatedTabIcon
+                    name={iconName ?? "circle"}
+                    focused={isFocused}
+                    color={color}
+                  />
+                  {route.name === "chats" && chatsUnreadTotal > 0 && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -10,
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: "#EF4444",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingHorizontal: 5,
+                        borderWidth: 2,
+                        borderColor: colors.bgSurface,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontFamily: "DMSans_700Bold",
+                          color: "#FFFFFF",
+                          lineHeight: 12,
+                        }}
+                      >
+                        {chatsUnreadTotal > 99 ? "99+" : chatsUnreadTotal}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 {isFocused && (
                   <View
                     style={{
@@ -241,6 +261,11 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       </View>
     </View>
   );
+}
+
+function TabBarWithUnread(props: BottomTabBarProps) {
+  const { totalUnread } = useChatUnread();
+  return <FloatingTabBar {...props} chatsUnreadTotal={totalUnread} />;
 }
 
 interface BackendUser {
@@ -336,7 +361,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} />}
+      tabBar={(props) => <TabBarWithUnread {...props} />}
       screenOptions={{
         headerShown: false,
       }}
