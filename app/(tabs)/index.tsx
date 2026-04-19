@@ -748,30 +748,14 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: colors.bgBase }}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleHomeRefresh}
-            tintColor="#059669"
-            colors={["#059669"]}
-            progressBackgroundColor={Platform.OS === "android" ? colors.bgSurface : undefined}
-            title={Platform.OS === "ios" ? t("common.refreshing") : undefined}
-            titleColor={colors.textSecondary}
-          />
-        }
-      >
-      {/* Hero Header */}
+    <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
+      {/* Hero Header (fixed) */}
       <Animated.View style={{ opacity: heroFade }}>
         <View
           style={{
             backgroundColor: "#059669",
             paddingTop: Platform.OS === "ios" ? 56 : 44,
-            paddingBottom: 32,
+            paddingBottom: 18,
             paddingHorizontal: 20,
             borderBottomLeftRadius: 24,
             borderBottomRightRadius: 24,
@@ -848,10 +832,10 @@ export default function HomeScreen() {
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: "rgba(255,255,255,0.18)",
-                borderRadius: 14,
-                marginTop: 16,
-                paddingHorizontal: 14,
-                height: 44,
+                borderRadius: 10,
+                marginTop: 12,
+                paddingHorizontal: 12,
+                height: 36,
               }}
             >
               <FontAwesome name="search" size={14} color="rgba(255,255,255,0.6)" />
@@ -888,7 +872,7 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* Section Header */}
+      {/* Section Header (fixed) */}
       <View
         style={{
           flexDirection: "row",
@@ -896,7 +880,7 @@ export default function HomeScreen() {
           alignItems: "center",
           paddingHorizontal: 20,
           marginTop: isEmployer ? 24 : 20,
-          marginBottom: 14,
+          paddingBottom: 14,
         }}
       >
         {isEmployer ? (
@@ -908,6 +892,11 @@ export default function HomeScreen() {
         )}
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {!isEmployer && (
+            <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: colors.textTertiary }}>
+              {t("home.filter")}:
+            </Text>
+          )}
           {/* Range filter button (worker only) */}
           {!isEmployer && (
             <TouchableOpacity
@@ -991,6 +980,26 @@ export default function HomeScreen() {
 
         </View>
       </View>
+
+      {/* Line after filters */}
+      <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", marginHorizontal: 20 }} />
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleHomeRefresh}
+            tintColor="#059669"
+            colors={["#059669"]}
+            progressBackgroundColor={Platform.OS === "android" ? colors.bgSurface : undefined}
+            title={Platform.OS === "ios" ? t("common.refreshing") : undefined}
+            titleColor={colors.textSecondary}
+          />
+        }
+      >
 
       {/* Category Filter Modal */}
       <Modal
@@ -1342,6 +1351,16 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             ) : null}
+
+            {/* No jobs in your city message */}
+            {rangeJobs.length === 0 && cityJobs.length === 0 && (
+              <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                <FontAwesome name="briefcase" size={24} color={colors.textTertiary} style={{ marginBottom: 8 }} />
+                <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: colors.textSecondary, textAlign: "center" }}>
+                  {t("home.noJobsInYourCity")}
+                </Text>
+              </View>
+            )}
 
             {/* 1. Jobs Near You (within work range) */}
             {rangeJobs.length > 0 && (

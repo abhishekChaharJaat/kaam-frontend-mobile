@@ -640,466 +640,98 @@ export default function JobDetailScreen() {
 
             <View style={{ paddingHorizontal: 20, marginTop: job.images.length > 0 ? 20 : 16 }}>
 
-              {isWorker ? (
-                /* ══ WORKER VIEW ══ */
-                <>
-                  {/* Title */}
-                  <Text
-                    style={{
-                      fontSize: 20,
-                      fontFamily: "DMSans_700Bold",
-                      color: colors.textPrimary,
-                      lineHeight: 26,
-                    }}
-                  >
+              {/* ══ UNIFIED VIEW ══ */}
+              <>
+                {/* Title + posted time */}
+                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                  <Text style={{ fontSize: 24, fontFamily: "DMSans_700Bold", color: colors.textPrimary, lineHeight: 32, flex: 1 }}>
                     {job.title}
                   </Text>
-
-                  {/* Description — right below title */}
-                  {job.description ? (
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontFamily: "DMSans_400Regular",
-                        color: colors.textSecondary,
-                        lineHeight: 20,
-                        marginTop: 6,
-                      }}
-                    >
-                      {job.description}
+                  {postedAtLabel?.relative ? (
+                    <Text style={{ fontSize: 12, fontFamily: "DMSans_500Medium", color: colors.textTertiary, marginTop: 6 }}>
+                      {postedAtLabel.relative}
                     </Text>
                   ) : null}
+                </View>
 
-                  {/* Meta strip: urgency · posted · distance */}
+                {/* Divider + Description */}
+                <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                <SectionHeader title={t("jobs.description")} />
+                <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 25 }}>
+                  {job.description}
+                </Text>
+
+                {/* Assigned banner (worker only) */}
+                {isWorker && job.status === "assigned" && myMongoUserId != null && job.assigned_to_user_id != null && (
                   <View
                     style={{
+                      marginTop: 12,
                       flexDirection: "row",
                       alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 4,
-                      marginTop: 10,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        backgroundColor: urgency.bg,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 6,
-                      }}
-                    >
-                      <FontAwesome name={urgency.icon} size={10} color={urgency.color} />
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontFamily: "DMSans_600SemiBold",
-                          color: urgency.color,
-                        }}
-                      >
-                        {urgency.label}
-                      </Text>
-                    </View>
-
-                    {postedAtLabel?.relative ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 }}>
-                        <FontAwesome name="clock-o" size={10} color={colors.textTertiary} />
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontFamily: "DMSans_500Medium",
-                            color: colors.textTertiary,
-                          }}
-                        >
-                          {postedAtLabel.relative}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {distanceKm != null ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 }}>
-                        <FontAwesome name="location-arrow" size={10} color={colors.textTertiary} />
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontFamily: "DMSans_500Medium",
-                            color: colors.textTertiary,
-                          }}
-                        >
-                          {t("jobs.kmAway", { km: formatKm(distanceKm) })}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Assigned banner */}
-                  {job.status === "assigned" && myMongoUserId != null && job.assigned_to_user_id != null && (
-                    <View
-                      style={{
-                        marginTop: 12,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        backgroundColor:
-                          job.assigned_to_user_id === myMongoUserId
-                            ? isDark
-                              ? "rgba(5,150,105,0.18)"
-                              : "rgba(5,150,105,0.1)"
-                            : isDark
-                              ? "rgba(245,158,11,0.12)"
-                              : "rgba(245,158,11,0.12)",
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor:
-                          job.assigned_to_user_id === myMongoUserId
-                            ? "rgba(5,150,105,0.35)"
-                            : "rgba(245,158,11,0.35)",
-                      }}
-                    >
-                      <FontAwesome
-                        name={job.assigned_to_user_id === myMongoUserId ? "check-circle" : "info-circle"}
-                        size={14}
-                        color={job.assigned_to_user_id === myMongoUserId ? "#059669" : "#D97706"}
-                      />
-                      <Text
-                        style={{
-                          flex: 1,
-                          fontSize: 12,
-                          fontFamily: "DMSans_600SemiBold",
-                          color:
-                            job.assigned_to_user_id === myMongoUserId
-                              ? "#059669"
-                              : colors.textPrimary,
-                          lineHeight: 17,
-                        }}
-                      >
-                        {job.assigned_to_user_id === myMongoUserId
-                          ? t("jobs.assignedToYou")
-                          : t("jobs.assignedToSomeoneElse")}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Compact Budget card */}
-                  <View
-                    style={{
-                      marginTop: 14,
-                      backgroundColor: isDark ? "rgba(5,150,105,0.14)" : "rgba(5,150,105,0.06)",
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
+                      gap: 8,
+                      backgroundColor:
+                        job.assigned_to_user_id === myMongoUserId
+                          ? isDark ? "rgba(5,150,105,0.18)" : "rgba(5,150,105,0.1)"
+                          : isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.12)",
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: isDark ? "rgba(5,150,105,0.3)" : "rgba(5,150,105,0.18)",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
+                      borderColor:
+                        job.assigned_to_user_id === myMongoUserId
+                          ? "rgba(5,150,105,0.35)"
+                          : "rgba(245,158,11,0.35)",
                     }}
                   >
-                    <View
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 10,
-                        backgroundColor: "#059669",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <FontAwesome name="rupee" size={15} color="#FFFFFF" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          fontSize: 9,
-                          fontFamily: "DMSans_600SemiBold",
-                          color: "#059669",
-                          textTransform: "uppercase",
-                          letterSpacing: 0.8,
-                        }}
-                      >
-                        {budgetTypeLabel(job, t)}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: budgetAmountStr ? 16 : 13,
-                          fontFamily: "DMSans_700Bold",
-                          color: "#059669",
-                          marginTop: 1,
-                        }}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                      >
-                        {budgetAmountStr ?? t("jobs.discuss")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Schedule grid: When + Time slot / Location */}
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                    <View
+                    <FontAwesome
+                      name={job.assigned_to_user_id === myMongoUserId ? "check-circle" : "info-circle"}
+                      size={14}
+                      color={job.assigned_to_user_id === myMongoUserId ? "#059669" : "#D97706"}
+                    />
+                    <Text
                       style={{
                         flex: 1,
-                        backgroundColor: colors.bgSurface,
-                        borderRadius: 10,
-                        paddingHorizontal: 10,
-                        paddingVertical: 9,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
+                        fontSize: 12,
+                        fontFamily: "DMSans_600SemiBold",
+                        color: job.assigned_to_user_id === myMongoUserId ? "#059669" : colors.textPrimary,
+                        lineHeight: 17,
                       }}
                     >
-                      <View
-                        style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 8,
-                          backgroundColor: "rgba(59,130,246,0.12)",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <FontAwesome name="calendar-o" size={11} color="#3B82F6" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 9,
-                            fontFamily: "DMSans_600SemiBold",
-                            color: colors.textTertiary,
-                            textTransform: "uppercase",
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {t("home.whenToStart")}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontFamily: "DMSans_700Bold",
-                            color: colors.textPrimary,
-                            marginTop: 1,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {job.required_date
-                            ? job.required_date_end
-                              ? `${formatDDMMYY(job.required_date)} – ${formatDDMMYY(job.required_date_end)}`
-                              : formatDDMMYY(job.required_date)
-                            : urgency.label}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {job.required_time_slot ? (
-                      <View
-                        style={{
-                          flex: 1,
-                          backgroundColor: colors.bgSurface,
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 9,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 8,
-                            backgroundColor: "rgba(139,92,246,0.12)",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <FontAwesome name="clock-o" size={11} color="#8B5CF6" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontFamily: "DMSans_600SemiBold",
-                              color: colors.textTertiary,
-                              textTransform: "uppercase",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {t("jobs.timeSlot")}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontFamily: "DMSans_700Bold",
-                              color: colors.textPrimary,
-                              textTransform: "capitalize",
-                              marginTop: 1,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {job.required_time_slot}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : location ? (
-                      <View
-                        style={{
-                          flex: 1,
-                          backgroundColor: colors.bgSurface,
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 9,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 8,
-                            backgroundColor: "rgba(239,68,68,0.12)",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <FontAwesome name="map-marker" size={11} color="#EF4444" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontFamily: "DMSans_600SemiBold",
-                              color: colors.textTertiary,
-                              textTransform: "uppercase",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {t("jobs.location")}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontFamily: "DMSans_700Bold",
-                              color: colors.textPrimary,
-                              marginTop: 1,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {location}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
+                      {job.assigned_to_user_id === myMongoUserId
+                        ? t("jobs.assignedToYou")
+                        : t("jobs.assignedToSomeoneElse")}
+                    </Text>
                   </View>
-                </>
-              ) : (
-                /* ══ EMPLOYER / DEFAULT VIEW ══ */
-                <>
-                  {/* Title */}
-                  <Text style={{ fontSize: 24, fontFamily: "DMSans_700Bold", color: colors.textPrimary, lineHeight: 32 }}>
-                    {job.title}
-                  </Text>
+                )}
 
-                  {/* Meta chips */}
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                    {location ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                        <FontAwesome name="map-marker" size={12} color={colors.textTertiary} />
-                        <Text style={{ fontSize: 13, fontFamily: "DMSans_500Medium", color: colors.textSecondary }}>{location}</Text>
-                      </View>
-                    ) : null}
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: urgency.bg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                      <FontAwesome name={urgency.icon} size={12} color={urgency.color} />
-                      <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: urgency.color }}>{urgency.label}</Text>
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, maxWidth: "100%" }}>
-                      <FontAwesome name="clock-o" size={12} color={colors.textTertiary} style={{ marginTop: 2 }} />
-                      <View style={{ flexShrink: 1 }}>
-                        <Text style={{ fontSize: 13, fontFamily: "DMSans_600SemiBold", color: colors.textSecondary }}>
-                          {postedAtLabel?.relative ?? "—"}
-                        </Text>
-                        {postedAtLabel?.absolute ? (
-                          <Text style={{ fontSize: 11, fontFamily: "DMSans_400Regular", color: colors.textTertiary, marginTop: 2 }}>
-                            {postedAtLabel.absolute}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  </View>
+                {/* Divider + Budget */}
+                <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
+                <SectionHeader title={t("jobs.budget")} />
+                <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 25 }}>
+                  {budgetAmountStr
+                    ? `${budgetTypeLabel(job, t)} — ${budgetAmountStr}`
+                    : budgetTypeLabel(job, t)}
+                </Text>
+              </>
+              {/* ══ END UNIFIED VIEW ══ */}
 
-                  {/* Divider + Description */}
-                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
-                  <SectionHeader title={t("jobs.description")} />
-                  <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 25 }}>
-                    {job.description}
-                  </Text>
-
-                  {/* Divider + Budget */}
-                  <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
-                  <SectionHeader title={t("jobs.budget")} />
-                  <View style={{ alignSelf: "flex-start", backgroundColor: isDark ? "rgba(5,150,105,0.12)" : "rgba(5,150,105,0.08)", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "flex-start", gap: 10, borderWidth: 1, borderColor: isDark ? "rgba(5,150,105,0.25)" : "rgba(5,150,105,0.15)", maxWidth: "100%" }}>
-                    <FontAwesome name="money" size={14} color="#059669" style={{ marginTop: 2 }} />
-                    <View style={{ flexShrink: 1 }}>
-                      {budgetAmountStr ? (
-                        <>
-                          <Text style={{ fontSize: 12, fontFamily: "DMSans_500Medium", color: colors.textTertiary }}>
-                            {budgetTypeLabel(job, t)}
-                          </Text>
-                          <Text style={{ fontSize: 15, fontFamily: "DMSans_700Bold", color: "#059669", marginTop: 4 }}>
-                            {budgetAmountStr}
-                          </Text>
-                        </>
-                      ) : (
-                        <Text style={{ fontSize: 15, fontFamily: "DMSans_700Bold", color: "#059669" }}>
-                          {budgetTypeLabel(job, t)}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                </>
-              )}
-
-              {/* ── Schedule (employer only) ── */}
-              {!isWorker && (job.required_date || job.required_time_slot) && (
+              {/* ── Schedule ── */}
+              {(job.required_date || job.required_time_slot) && (
                 <>
                   <View style={{ height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", marginVertical: 20 }} />
                   <SectionHeader title={t("jobs.schedule")} />
-                  <View style={{ flexDirection: "row", gap: 10 }}>
-                    {job.required_date && (
-                      <View style={{ flex: 1, backgroundColor: colors.bgSurface, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border }}>
-                        <FontAwesome name="calendar-check-o" size={18} color="#3B82F6" />
-                        <View>
-                          <Text style={{ fontSize: 11, fontFamily: "DMSans_500Medium", color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 0.3 }}>{t("jobs.requiredDate")}</Text>
-                          <Text style={{ fontSize: 14, fontFamily: "DMSans_600SemiBold", color: colors.textPrimary, marginTop: 2 }}>
-                            {job.required_date_end
-                              ? `${formatDDMMYY(job.required_date)} – ${formatDDMMYY(job.required_date_end)}`
-                              : formatDDMMYY(job.required_date)}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                    {job.required_time_slot && (
-                      <View style={{ flex: 1, backgroundColor: colors.bgSurface, borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.border }}>
-                        <FontAwesome name="clock-o" size={18} color="#8B5CF6" />
-                        <View>
-                          <Text style={{ fontSize: 11, fontFamily: "DMSans_500Medium", color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 0.3 }}>{t("jobs.timeSlot")}</Text>
-                          <Text style={{ fontSize: 14, fontFamily: "DMSans_600SemiBold", color: colors.textPrimary, marginTop: 2, textTransform: "capitalize" }}>{job.required_time_slot}</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                  <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textPrimary, lineHeight: 25 }}>
+                    {[
+                      job.required_date
+                        ? `${t("jobs.requiredDate")}: ${job.required_date_end
+                            ? `${formatDDMMYY(job.required_date)} – ${formatDDMMYY(job.required_date_end)}`
+                            : formatDDMMYY(job.required_date)}`
+                        : null,
+                      job.required_time_slot
+                        ? `${t("jobs.timeSlot")}: ${job.required_time_slot}`
+                        : null,
+                    ].filter(Boolean).join("\n")}
+                  </Text>
                 </>
               )}
 

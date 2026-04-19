@@ -242,18 +242,20 @@ export default function ProfileScreen() {
             >
               {workTitle}
             </Text>
-          ) : (
+          ) : null}
+
+          {usagePreference === "find_work" && user?.primaryEmailAddress?.emailAddress ? (
             <Text
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 fontFamily: "DMSans_400Regular",
-                color: "rgba(255,255,255,0.75)",
-                marginTop: 4,
+                color: "rgba(255,255,255,0.7)",
+                marginTop: workTitle ? 2 : 4,
               }}
             >
-              {user?.primaryEmailAddress?.emailAddress || ""}
+              {user.primaryEmailAddress.emailAddress}
             </Text>
-          )}
+          ) : null}
 
           <View
             style={{

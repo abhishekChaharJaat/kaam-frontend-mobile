@@ -501,8 +501,8 @@ export default function ChatList() {
           >
             {(
               [
-                { key: "poster" as const, label: t("chat.findingWorker") },
                 { key: "responder" as const, label: t("chat.findingWork") },
+                { key: "poster" as const, label: t("chat.findingWorker") },
               ] as const
             ).map((tab) => {
               const isActive = activeTab === tab.key;
