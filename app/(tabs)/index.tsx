@@ -885,7 +885,7 @@ export default function HomeScreen() {
       >
         {isEmployer ? (
           <Text style={{ fontSize: 18, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
-            {t("home.myJobs")}
+            {t("home.myPostedJobs")}
           </Text>
         ) : (
           <View />

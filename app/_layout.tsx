@@ -114,7 +114,7 @@ export default function RootLayout() {
         <View style={[{ flex: 1 }, themeVars]}>
           <StatusBar
             barStyle={isDark ? "light-content" : "dark-content"}
-            backgroundColor={isDark ? "#0A0F1A" : "#F8FAFC"}
+            backgroundColor="#059669"
           />
           <ToastProvider isDark={isDark}>
             <ChatUnreadProvider>
