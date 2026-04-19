@@ -1,4 +1,5 @@
 import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { useCallback } from "react";
 import { useOAuth } from "@clerk/clerk-expo";
 
@@ -9,7 +10,8 @@ export function useGoogleAuth() {
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      const { createdSessionId, setActive } = await startOAuthFlow();
+      const redirectUrl = Linking.createURL("/(auth)/login");
+      const { createdSessionId, setActive } = await startOAuthFlow({ redirectUrl });
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
         return { success: true };

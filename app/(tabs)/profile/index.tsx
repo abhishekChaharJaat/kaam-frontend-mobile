@@ -362,6 +362,15 @@ export default function ProfileScreen() {
             iconBg="rgba(59,130,246,0.1)"
             iconColor="#3B82F6"
           />
+          <Divider />
+          <MenuItem
+            icon="lock"
+            title={t("profile.changePassword")}
+            subtitle={t("profile.changePasswordSubtitle")}
+            onPress={() => router.push("/change-password")}
+            iconBg="rgba(139,92,246,0.1)"
+            iconColor="#8B5CF6"
+          />
         </SectionCard>
 
         {/* Preferences Section */}
