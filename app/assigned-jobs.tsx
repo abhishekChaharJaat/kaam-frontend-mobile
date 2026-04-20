@@ -296,17 +296,25 @@ export default function AssignedJobsScreen() {
       >
         <TouchableOpacity
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          activeOpacity={0.7}
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
+            width: 38,
+            height: 38,
+            borderRadius: 19,
             backgroundColor: colors.bgSurface,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 14,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.08,
+            shadowRadius: 4,
+            elevation: 2,
+            borderWidth: 1,
+            borderColor: colors.border,
           }}
         >
-          <FontAwesome name="chevron-left" size={16} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={15} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text

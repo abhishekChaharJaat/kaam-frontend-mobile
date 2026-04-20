@@ -13,6 +13,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { timeAgo } from "@/lib/timeAgo";
 import { useNotificationUnread } from "@/contexts/NotificationUnreadContext";
 
 interface Notification {
@@ -120,13 +121,18 @@ export default function NotificationsScreen() {
           />
         </View>
         <View className="flex-1 ml-3">
-          <Text
-            className={`text-body font-sans-medium ${
-              item.is_read ? "text-text-secondary" : "text-text-primary"
-            }`}
-          >
-            {item.title}
-          </Text>
+          <View className="flex-row justify-between items-start">
+            <Text
+              className={`text-body font-sans-medium flex-1 mr-2 ${
+                item.is_read ? "text-text-secondary" : "text-text-primary"
+              }`}
+            >
+              {item.title}
+            </Text>
+            <Text className="text-caption text-text-tertiary font-sans-regular">
+              {timeAgo(item.created_at)}
+            </Text>
+          </View>
           <Text className="text-body-sm text-text-tertiary mt-0.5">
             {item.body}
           </Text>

@@ -553,16 +553,24 @@ export default function JobDetailScreen() {
       >
         <TouchableOpacity
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          activeOpacity={0.7}
           style={{
             width: 38,
             height: 38,
-            borderRadius: 12,
-            backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+            borderRadius: 19,
+            backgroundColor: colors.bgSurface,
             alignItems: "center",
             justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: isDark ? 0.3 : 0.08,
+            shadowRadius: 4,
+            elevation: 2,
+            borderWidth: 1,
+            borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
           }}
         >
-          <FontAwesome name="chevron-left" size={16} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={15} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text
           style={{

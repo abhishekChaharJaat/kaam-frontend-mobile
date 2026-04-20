@@ -71,10 +71,11 @@ export default function ForgotPasswordScreen() {
       >
         <View className="flex-1 px-6 pt-16">
           <TouchableOpacity
-            className="w-10 h-10 bg-bg-surface border border-border rounded-xl items-center justify-center mb-8"
+            className="w-[38px] h-[38px] rounded-full bg-bg-surface border border-border items-center justify-center mb-8 shadow-sm"
+            activeOpacity={0.7}
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           >
-            <FontAwesome name="chevron-left" size={16} color="#9CA3AF" />
+            <FontAwesome name="chevron-left" size={15} color="#9CA3AF" />
           </TouchableOpacity>
 
           <Text className="text-h1 text-text-primary font-sans-bold mb-2">

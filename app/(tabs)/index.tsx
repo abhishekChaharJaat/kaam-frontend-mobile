@@ -21,6 +21,7 @@ import { api } from "@/lib/api";
 import { useUserStore } from "@/store/user";
 import { useTranslation } from "react-i18next";
 import { useThemeColors } from "@/lib/useThemeColors";
+import { timeAgo } from "@/lib/timeAgo";
 
 interface Job {
   id: string;
@@ -87,9 +88,9 @@ function formatShortDate(dateStr: string): string {
 
 function formatScheduledLabel(job: Pick<Job, "required_date" | "required_date_end" | "urgency">, fallback: string): string {
   if (job.required_date && job.required_date_end) {
-    return `${formatShortDate(job.required_date)} – ${formatShortDate(job.required_date_end)}`;
+    return `Needed: ${formatShortDate(job.required_date)} – ${formatShortDate(job.required_date_end)}`;
   }
-  if (job.required_date) return formatShortDate(job.required_date);
+  if (job.required_date) return `Needed: ${formatShortDate(job.required_date)}`;
   return fallback;
 }
 
@@ -236,17 +237,33 @@ function JobCard({
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text
-              numberOfLines={2}
-              style={{
-                fontSize: 15,
-                fontFamily: "DMSans_600SemiBold",
-                color: colors.textPrimary,
-                lineHeight: 21,
-              }}
-            >
-              {job.title}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <Text
+                numberOfLines={2}
+                style={{
+                  fontSize: 15,
+                  fontFamily: "DMSans_600SemiBold",
+                  color: colors.textPrimary,
+                  lineHeight: 21,
+                  flex: 1,
+                  marginRight: 8,
+                }}
+              >
+                {job.title}
+              </Text>
+              {job.created_at ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "DMSans_400Regular",
+                    color: colors.textTertiary,
+                    lineHeight: 21,
+                  }}
+                >
+                  {timeAgo(job.created_at)}
+                </Text>
+              ) : null}
+            </View>
 
             <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
               <FontAwesome name="map-marker" size={11} color={colors.textTertiary} />
@@ -832,10 +849,10 @@ export default function HomeScreen() {
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: "rgba(255,255,255,0.18)",
-                borderRadius: 10,
+                borderRadius: 999,
                 marginTop: 12,
-                paddingHorizontal: 12,
-                height: 36,
+                paddingHorizontal: 16,
+                height: 40,
               }}
             >
               <FontAwesome name="search" size={14} color="rgba(255,255,255,0.6)" />

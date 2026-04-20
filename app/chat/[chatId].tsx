@@ -459,8 +459,12 @@ export default function ChatRoom() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-border bg-bg-base">
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} className="mr-3">
-          <FontAwesome name="chevron-left" size={20} color={colors.textPrimary} />
+        <TouchableOpacity
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          activeOpacity={0.7}
+          className="w-[38px] h-[38px] rounded-full bg-bg-surface border border-border items-center justify-center mr-3.5 shadow-sm"
+        >
+          <FontAwesome name="chevron-left" size={15} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
           className="flex-1"

@@ -12,6 +12,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { timeAgo } from "@/lib/timeAgo";
 
 interface Job {
   id: string;
@@ -86,6 +87,9 @@ export default function JobsFeed() {
       <View className="flex-row justify-between items-start mb-2">
         <Text className="text-body-lg text-text-primary font-sans-semibold flex-1 mr-2">
           {item.title}
+        </Text>
+        <Text className="text-caption text-text-tertiary font-sans-regular">
+          {timeAgo(item.created_at)}
         </Text>
         <View
           className={`px-2 py-0.5 rounded-full ${

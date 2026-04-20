@@ -136,8 +136,12 @@ export default function SearchScreen() {
     <View className="flex-1 bg-bg-base pt-12">
       <View className="px-4 mb-4">
         <View className="flex-row items-center bg-bg-surface border border-border rounded-xl px-4">
-          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} className="mr-2">
-            <FontAwesome name="chevron-left" size={18} color={colors.textPrimary} />
+          <TouchableOpacity
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            activeOpacity={0.7}
+            className="w-[38px] h-[38px] rounded-full bg-bg-surface border border-border items-center justify-center mr-2 shadow-sm"
+          >
+            <FontAwesome name="chevron-left" size={15} color={colors.textPrimary} />
           </TouchableOpacity>
           <FontAwesome name="search" size={16} color="#94A3B8" />
           <TextInput
