@@ -19,6 +19,7 @@ import { useUserStore } from "@/store/user";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import LocationPickerModal from "@/components/LocationPickerModal";
 
 interface UserProfile {
   id: string;
@@ -53,6 +54,18 @@ export default function EditProfileScreen() {
   const [workRange, setWorkRange] = useState<number | null>(null);
   const [workRangeVisible, setWorkRangeVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(
+    location?.latitude && location?.longitude
+      ? { latitude: location.latitude, longitude: location.longitude }
+      : null
+  );
+  const [mapLabel, setMapLabel] = useState<string | null>(
+    location?.locality
+      ? `${location.locality}, ${location.city || ""}`
+      : location?.city || null
+  );
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const isDark = colors.bgBase === "#0A0F1A";
   const isWorker = usagePreference === "find_work";
@@ -96,8 +109,6 @@ export default function EditProfileScreen() {
         body: {
           full_name: fullName.trim(),
           phone: phone.trim() || null,
-          city: city.trim() || null,
-          locality: locality.trim() || null,
           ...(isWorker && {
             work_title: headline.trim() || null,
             bio: bio.trim() || null,
@@ -111,6 +122,41 @@ export default function EditProfileScreen() {
       showToast(t("common.error"), "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleConfirmLocation = async (
+    coords: { latitude: number; longitude: number },
+    geo: { city?: string; locality?: string; state?: string }
+  ) => {
+    setSavingLocation(true);
+    try {
+      const token = await getToken();
+      await api("/users/me", {
+        method: "PATCH",
+        token,
+        body: {
+          city: geo.city || null,
+          locality: geo.locality || null,
+          state: geo.state || null,
+          location: {
+            type: "Point",
+            coordinates: [coords.longitude, coords.latitude],
+          },
+        },
+      });
+      setCity(geo.city || "");
+      setLocality(geo.locality || "");
+      setMapCoords(coords);
+      setMapLabel(
+        geo.locality ? `${geo.locality}, ${geo.city || ""}` : geo.city || null
+      );
+      setMapVisible(false);
+      showToast(t("settings.locationUpdated"), "success");
+    } catch {
+      showToast(t("common.error"), "error");
+    } finally {
+      setSavingLocation(false);
     }
   };
 
@@ -147,7 +193,7 @@ export default function EditProfileScreen() {
           activeOpacity={0.7}
           style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.bgSurface, alignItems: "center", justifyContent: "center" }}
         >
-          <FontAwesome name="arrow-left" size={14} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={14} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#059669", alignItems: "center", justifyContent: "center", marginLeft: 14 }}>
@@ -198,33 +244,39 @@ export default function EditProfileScreen() {
           labelColor={colors.textSecondary}
         />
 
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <PillInput
-              label={t("profile.city")}
-              value={city}
-              onChangeText={setCity}
-              placeholder={t("profile.cityPlaceholder")}
-              placeholderColor={colors.textTertiary}
-              bg={inputBg}
-              border={inputBorder}
-              textColor={colors.textPrimary}
-              labelColor={colors.textSecondary}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <PillInput
-              label={t("profile.locality")}
-              value={locality}
-              onChangeText={setLocality}
-              placeholder={t("profile.localityPlaceholder")}
-              placeholderColor={colors.textTertiary}
-              bg={inputBg}
-              border={inputBorder}
-              textColor={colors.textPrimary}
-              labelColor={colors.textSecondary}
-            />
-          </View>
+        {/* Location — read-only with map picker */}
+        <View style={{ marginBottom: 14 }}>
+          <Text style={{ fontSize: 12, fontFamily: "DMSans_600SemiBold", color: colors.textSecondary, marginBottom: 6, marginLeft: 4 }}>
+            {t("settings.updateLocation")}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setMapVisible(true)}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: inputBg,
+              borderWidth: 1.5,
+              borderColor: inputBorder,
+              borderRadius: 999,
+              paddingHorizontal: 18,
+              paddingVertical: 14,
+            }}
+          >
+            <FontAwesome name="map-marker" size={16} color="#059669" style={{ marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              {locality || city ? (
+                <Text style={{ fontSize: 15, fontFamily: "DMSans_500Medium", color: colors.textPrimary }}>
+                  {[locality, city].filter(Boolean).join(", ")}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 15, fontFamily: "DMSans_400Regular", color: colors.textTertiary }}>
+                  {t("settings.notSet")}
+                </Text>
+              )}
+            </View>
+            <FontAwesome name="chevron-right" size={12} color={colors.textTertiary} />
+          </TouchableOpacity>
         </View>
 
         {/* Service Profile — workers only */}
@@ -415,6 +467,15 @@ export default function EditProfileScreen() {
           })}
         </View>
       </Modal>
+
+      <LocationPickerModal
+        visible={mapVisible}
+        initialCoords={mapCoords}
+        initialLabel={mapLabel}
+        onClose={() => setMapVisible(false)}
+        onConfirm={handleConfirmLocation}
+        saving={savingLocation}
+      />
     </KeyboardAvoidingView>
   );
 }

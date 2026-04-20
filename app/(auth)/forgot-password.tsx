@@ -74,7 +74,7 @@ export default function ForgotPasswordScreen() {
             className="w-10 h-10 bg-bg-surface border border-border rounded-xl items-center justify-center mb-8"
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           >
-            <FontAwesome name="arrow-left" size={16} color="#9CA3AF" />
+            <FontAwesome name="chevron-left" size={16} color="#9CA3AF" />
           </TouchableOpacity>
 
           <Text className="text-h1 text-text-primary font-sans-bold mb-2">

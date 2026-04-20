@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { useSignIn } from "@clerk/clerk-expo";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import KaamSpotLogo from "@/components/KaamSpotLogo";
+import AuthLanguagePicker from "@/components/AuthLanguagePicker";
 import { useGoogleAuth } from "@/lib/oauth";
 import { useTranslation } from "react-i18next";
 
@@ -52,6 +53,7 @@ export default function LoginScreen() {
       className="flex-1 bg-bg-base"
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <AuthLanguagePicker />
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"

@@ -3,12 +3,15 @@ import { useRouter } from "expo-router";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Keyboard,
   Linking,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
+import * as ExpoLocation from "expo-location";
 import { getCurrentLocation, reverseGeocode, checkLocationPermission } from "@/lib/location";
 import { useUserStore } from "@/store/user";
 import { useTranslation } from "react-i18next";
@@ -23,11 +26,12 @@ interface CenterCoords {
 const LocationMap = memo(function LocationMap({
   initialCoords,
   onCenterChanged,
+  mapRef,
 }: {
   initialCoords: CenterCoords;
   onCenterChanged: (coords: CenterCoords) => void;
+  mapRef: React.RefObject<MapView | null>;
 }) {
-  const mapRef = useRef<MapView>(null);
   const userTouched = useRef(false);
 
   return (
@@ -86,6 +90,57 @@ export default function LocationPermissionScreen() {
   const [initialCoords, setInitialCoords] = useState<CenterCoords | null>(null);
   const coordsRef = useRef<CenterCoords | null>(null);
   const geocodeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapRef = useRef<MapView>(null);
+  const [pincode, setPincode] = useState("");
+  const [pincodeSearching, setPincodeSearching] = useState(false);
+  const [pincodeError, setPincodeError] = useState<string | null>(null);
+
+  const onPincodeSearch = async () => {
+    const trimmed = pincode.trim();
+    if (trimmed.length < 4) return;
+    Keyboard.dismiss();
+    setPincodeSearching(true);
+    setPincodeError(null);
+    try {
+      const results = await ExpoLocation.geocodeAsync(`${trimmed}, India`);
+      if (results.length === 0) {
+        setPincodeError(t("onboarding.pincodeNotFound"));
+        return;
+      }
+      const { latitude, longitude } = results[0];
+      coordsRef.current = { latitude, longitude };
+
+      if (!showMap) {
+        setInitialCoords({ latitude, longitude });
+        setShowMap(true);
+      } else {
+        mapRef.current?.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 600);
+      }
+
+      const geo = await reverseGeocode(latitude, longitude);
+      setLocation({
+        latitude,
+        longitude,
+        city: geo.city,
+        locality: geo.locality,
+        state: geo.state,
+      });
+      setDetected(
+        geo.locality
+          ? `${geo.locality}, ${geo.city || ""}`
+          : geo.city || t("onboarding.locationDetected")
+      );
+    } catch {
+      setPincodeError(t("onboarding.pincodeNotFound"));
+    } finally {
+      setPincodeSearching(false);
+    }
+  };
 
   const onAllowLocation = async () => {
     setLoading(true);
@@ -203,6 +258,37 @@ export default function LocationPermissionScreen() {
             )}
           </TouchableOpacity>
 
+          <View className="flex-row items-center mt-4 mb-2" style={{ gap: 8 }}>
+            <View className="flex-1 bg-bg-surface rounded-lg border border-border px-4" style={{ height: 48, justifyContent: "center" }}>
+              <TextInput
+                placeholder={t("onboarding.enterPincode")}
+                placeholderTextColor="#9CA3AF"
+                value={pincode}
+                onChangeText={(text) => { setPincode(text.replace(/[^0-9]/g, "")); setPincodeError(null); }}
+                keyboardType="number-pad"
+                maxLength={6}
+                returnKeyType="search"
+                onSubmitEditing={onPincodeSearch}
+                style={{ fontSize: 15, fontFamily: "DMSans_500Medium", color: "#111827" }}
+              />
+            </View>
+            <TouchableOpacity
+              className="bg-primary rounded-lg items-center justify-center"
+              style={{ width: 48, height: 48 }}
+              onPress={onPincodeSearch}
+              disabled={pincodeSearching || pincode.trim().length < 4}
+            >
+              {pincodeSearching ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <FontAwesome name="search" size={18} color="#FFF" />
+              )}
+            </TouchableOpacity>
+          </View>
+          {pincodeError && (
+            <Text className="text-error text-body-sm text-center mb-2">{pincodeError}</Text>
+          )}
+
           <TouchableOpacity
             className="items-center py-3"
             onPress={() => router.push("/(onboarding)/usage-preference")}
@@ -218,15 +304,46 @@ export default function LocationPermissionScreen() {
             <Text className="text-h2 font-sans-bold text-text-primary mb-1">
               {t("onboarding.confirmLocation")}
             </Text>
-            <Text className="text-body-sm text-text-secondary">
+            <Text className="text-body-sm text-text-secondary mb-3">
               {t("onboarding.moveMapToAdjust")}
             </Text>
+            <View className="flex-row items-center" style={{ gap: 8 }}>
+              <View className="flex-1 bg-bg-surface rounded-lg border border-border px-4" style={{ height: 44, justifyContent: "center" }}>
+                <TextInput
+                  placeholder={t("onboarding.enterPincode")}
+                  placeholderTextColor="#9CA3AF"
+                  value={pincode}
+                  onChangeText={(text) => { setPincode(text.replace(/[^0-9]/g, "")); setPincodeError(null); }}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  returnKeyType="search"
+                  onSubmitEditing={onPincodeSearch}
+                  style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: "#111827" }}
+                />
+              </View>
+              <TouchableOpacity
+                className="bg-primary rounded-lg items-center justify-center"
+                style={{ width: 44, height: 44 }}
+                onPress={onPincodeSearch}
+                disabled={pincodeSearching || pincode.trim().length < 4}
+              >
+                {pincodeSearching ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <FontAwesome name="search" size={16} color="#FFF" />
+                )}
+              </TouchableOpacity>
+            </View>
+            {pincodeError && (
+              <Text className="text-error text-body-sm mt-1">{pincodeError}</Text>
+            )}
           </View>
 
           <View style={{ flex: 1, marginHorizontal: 20, borderRadius: 16, overflow: "hidden", marginBottom: 12 }}>
             <LocationMap
               initialCoords={initialCoords}
               onCenterChanged={onCenterChanged}
+              mapRef={mapRef}
             />
           </View>
 

@@ -204,7 +204,7 @@ export default function PostJob() {
             onPress={() => (step > 1 ? animateStep(step - 1) : (router.canGoBack() ? router.back() : router.replace('/(tabs)')))}
             className="w-10 h-10 bg-bg-surface border border-border rounded-full items-center justify-center"
           >
-            <FontAwesome name="arrow-left" size={16} color={colors.textPrimary} />
+            <FontAwesome name="chevron-left" size={16} color={colors.textPrimary} />
           </TouchableOpacity>
           <View className="items-center">
             <Text className="text-body-sm text-text-tertiary font-sans-medium">

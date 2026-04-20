@@ -104,7 +104,7 @@ export default function ChangePasswordScreen() {
             justifyContent: "center",
           }}
         >
-          <FontAwesome name="arrow-left" size={16} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={16} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text
           style={{

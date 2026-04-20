@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Platform,
   Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -15,71 +16,11 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useThemeStore } from "@/store/theme";
 import { useUserStore } from "@/store/user";
 import { api } from "@/lib/api";
-import { getCurrentLocation, checkLocationPermission, reverseGeocode } from "@/lib/location";
-import MapView from "react-native-maps";
-import { Platform } from "react-native";
+import { getCurrentLocation, checkLocationPermission } from "@/lib/location";
 import i18n from "@/i18n";
 import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
-
-interface CenterCoords {
-  latitude: number;
-  longitude: number;
-}
-
-const SettingsLocationMap = memo(function SettingsLocationMap({
-  initialCoords,
-  onCenterChanged,
-}: {
-  initialCoords: CenterCoords;
-  onCenterChanged: (coords: CenterCoords) => void;
-}) {
-  const mapRef = useRef<MapView>(null);
-  const userTouched = useRef(false);
-
-  return (
-    <View style={{ flex: 1 }}>
-      <MapView
-        ref={mapRef}
-        style={{ flex: 1 }}
-        initialRegion={{
-          latitude: initialCoords.latitude,
-          longitude: initialCoords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        onPanDrag={() => { userTouched.current = true; }}
-        onRegionChangeComplete={(region) => {
-          if (!userTouched.current) return;
-          userTouched.current = false;
-          onCenterChanged({ latitude: region.latitude, longitude: region.longitude });
-        }}
-        showsUserLocation
-        showsMyLocationButton={false}
-      />
-      {/* Fixed center pin */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <FontAwesome
-          name="map-marker"
-          size={44}
-          color="#059669"
-          style={{ marginBottom: 44 }}
-        />
-      </View>
-    </View>
-  );
-});
+import LocationPickerModal from "@/components/LocationPickerModal";
 
 const LANG_STORAGE_KEY = "@app_language";
 
@@ -135,7 +76,7 @@ function SettingRow({
           color={danger ? "#EF4444" : iconColor || "#059669"}
         />
       </View>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, marginRight: 8 }}>
         <Text
           style={{
             fontSize: 15,
@@ -145,19 +86,20 @@ function SettingRow({
         >
           {title}
         </Text>
+        {value ? (
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 12,
+              fontFamily: "DMSans_400Regular",
+              color: subtextColor,
+              marginTop: 2,
+            }}
+          >
+            {value}
+          </Text>
+        ) : null}
       </View>
-      {value && (
-        <Text
-          style={{
-            fontSize: 13,
-            fontFamily: "DMSans_400Regular",
-            color: subtextColor,
-            marginRight: 6,
-          }}
-        >
-          {value}
-        </Text>
-      )}
       {!readonly && (
         <FontAwesome
           name="chevron-right"
@@ -242,7 +184,6 @@ export default function SettingsScreen() {
   const colors = useThemeColors();
   const { usagePreference, location, setLocation } = useUserStore();
   const [language, setLanguage] = useState(i18n.language);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [updatingLocation, setUpdatingLocation] = useState(false);
   const [workRangeVisible, setWorkRangeVisible] = useState(false);
   const [workRange, setWorkRange] = useState<number | null>(null);
@@ -250,7 +191,6 @@ export default function SettingsScreen() {
   const [mapVisible, setMapVisible] = useState(false);
   const [mapCoords, setMapCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapLabel, setMapLabel] = useState<string | null>(null);
-  const [geocoding, setGeocoding] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const isDark = colors.bgBase === "#0A0F1A";
   const isWorker = usagePreference === "find_work";
@@ -280,18 +220,6 @@ export default function SettingsScreen() {
   const locationLabel = location?.locality
     ? `${location.locality}, ${location.city || ""}`
     : location?.city || t("settings.notSet");
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      const AsyncStorage =
-        require("@react-native-async-storage/async-storage").default;
-      await AsyncStorage.multiRemove(["@user_state", "@app_theme", "@app_language"]);
-      await signOut();
-    } catch {
-      setLoggingOut(false);
-    }
-  };
 
   const toggleLanguage = async () => {
     const newLang = language === "en" ? "hi" : "en";
@@ -336,7 +264,6 @@ export default function SettingsScreen() {
         return;
       }
       // Open map with current GPS position
-      mapCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude };
       setMapCoords({ latitude: loc.latitude, longitude: loc.longitude });
       setMapLabel(
         loc.locality
@@ -351,38 +278,15 @@ export default function SettingsScreen() {
     }
   };
 
-  const geocodeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mapCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
-
-  const onMapCenterChanged = useCallback((newCoords: CenterCoords) => {
-    mapCoordsRef.current = newCoords;
-
-    if (geocodeTimeout.current) clearTimeout(geocodeTimeout.current);
-    geocodeTimeout.current = setTimeout(async () => {
-      setGeocoding(true);
-      try {
-        const geo = await reverseGeocode(newCoords.latitude, newCoords.longitude);
-        setMapLabel(
-          geo.locality
-            ? `${geo.locality}, ${geo.city || ""}`
-            : geo.city || t("onboarding.locationDetected")
-        );
-      } catch {
-      } finally {
-        setGeocoding(false);
-      }
-    }, 500);
-  }, [t]);
-
-  const handleConfirmMapLocation = async () => {
-    const c = mapCoordsRef.current;
-    if (!c) return;
+  const handleConfirmLocation = async (
+    coords: { latitude: number; longitude: number },
+    geo: { city?: string; locality?: string; state?: string }
+  ) => {
     setSavingLocation(true);
     try {
-      const geo = await reverseGeocode(c.latitude, c.longitude);
       setLocation({
-        latitude: c.latitude,
-        longitude: c.longitude,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
         city: geo.city,
         locality: geo.locality,
         state: geo.state,
@@ -397,7 +301,7 @@ export default function SettingsScreen() {
           state: geo.state || null,
           location: {
             type: "Point",
-            coordinates: [c.longitude, c.latitude],
+            coordinates: [coords.longitude, coords.latitude],
           },
         },
       });
@@ -433,20 +337,6 @@ export default function SettingsScreen() {
 
   return (
     <View className="flex-1 bg-bg-base">
-      {loggingOut && (
-        <View
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.45)",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-          }}
-        >
-          <ActivityIndicator size="large" color="#059669" />
-        </View>
-      )}
       {/* Header */}
       <View
         style={{
@@ -479,7 +369,7 @@ export default function SettingsScreen() {
               : "rgba(0,0,0,0.04)",
           }}
         >
-          <FontAwesome name="arrow-left" size={15} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={15} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text
           style={{
@@ -558,7 +448,7 @@ export default function SettingsScreen() {
           />
         </SectionCard>
 
-        {/* Support */}
+        {/* Other */}
         <Text
           style={{
             fontSize: 11,
@@ -570,29 +460,9 @@ export default function SettingsScreen() {
             letterSpacing: 0.8,
           }}
         >
-          {t("settings.support")}
+          {t("settings.other", { defaultValue: "OTHER" })}
         </Text>
         <SectionCard isDark={isDark} bgSurface={colors.bgSurface}>
-          <SettingRow
-            icon="question-circle"
-            title={t("settings.helpSupport")}
-            onPress={() => router.push("/help")}
-            iconBg="rgba(245,158,11,0.1)"
-            iconColor="#F59E0B"
-            textColor={colors.textPrimary}
-            subtextColor={colors.textSecondary}
-          />
-          <Divider />
-          <SettingRow
-            icon="file-text-o"
-            title={t("settings.termsPrivacy")}
-            onPress={() => router.push("/terms")}
-            iconBg="rgba(107,114,128,0.1)"
-            iconColor="#6B7280"
-            textColor={colors.textPrimary}
-            subtextColor={colors.textSecondary}
-          />
-          <Divider />
           <SettingRow
             icon="info-circle"
             title={t("settings.about")}
@@ -630,16 +500,6 @@ export default function SettingsScreen() {
         </Text>
         <SectionCard isDark={isDark} bgSurface={colors.bgSurface}>
           <SettingRow
-            icon="sign-out"
-            title={t("auth.logout")}
-            onPress={handleLogout}
-            iconBg="rgba(245,158,11,0.08)"
-            iconColor="#F59E0B"
-            textColor={colors.textPrimary}
-            subtextColor={colors.textSecondary}
-          />
-          <Divider />
-          <SettingRow
             icon="trash"
             title={t("settings.deleteAccount")}
             onPress={handleDeleteAccount}
@@ -650,82 +510,14 @@ export default function SettingsScreen() {
         </SectionCard>
       </ScrollView>
 
-      {/* Map Location Picker Modal */}
-      <Modal
+      <LocationPickerModal
         visible={mapVisible}
-        animationType="slide"
-        onRequestClose={() => setMapVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
-          {/* Header */}
-          <View style={{ paddingTop: Platform.OS === "ios" ? 56 : 16, paddingHorizontal: 20, paddingBottom: 12 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <TouchableOpacity onPress={() => setMapVisible(false)}>
-                <FontAwesome name="arrow-left" size={18} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 17, fontFamily: "DMSans_700Bold", color: colors.textPrimary }}>
-                {t("settings.updateLocation")}
-              </Text>
-              <View style={{ width: 18 }} />
-            </View>
-            <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary, textAlign: "center" }}>
-              {t("onboarding.moveMapToAdjust")}
-            </Text>
-          </View>
-
-          {/* Map */}
-          {mapCoords && (
-            <View style={{ flex: 1, marginHorizontal: 16, borderRadius: 16, overflow: "hidden", marginBottom: 12 }}>
-              <SettingsLocationMap
-                initialCoords={mapCoords}
-                onCenterChanged={onMapCenterChanged}
-              />
-            </View>
-          )}
-
-          {/* Location label */}
-          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-            {geocoding ? (
-              <View style={{ backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                <ActivityIndicator size="small" color="#059669" />
-                <Text style={{ fontSize: 13, fontFamily: "DMSans_400Regular", color: colors.textSecondary, marginLeft: 8 }}>
-                  {t("onboarding.detectingLocation")}
-                </Text>
-              </View>
-            ) : mapLabel ? (
-              <View style={{ backgroundColor: "rgba(16,185,129,0.1)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                <FontAwesome name="check-circle" size={16} color="#10B981" />
-                <Text style={{ fontSize: 14, fontFamily: "DMSans_500Medium", color: "#10B981", marginLeft: 8 }}>
-                  {mapLabel}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Confirm button */}
-          <View style={{ paddingHorizontal: 20, paddingBottom: Platform.OS === "ios" ? 36 : 20 }}>
-            <TouchableOpacity
-              onPress={handleConfirmMapLocation}
-              disabled={geocoding || savingLocation}
-              activeOpacity={0.8}
-              style={{
-                backgroundColor: geocoding || savingLocation ? "#D1D5DB" : "#059669",
-                borderRadius: 12,
-                paddingVertical: 16,
-                alignItems: "center",
-              }}
-            >
-              {savingLocation ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={{ fontSize: 16, fontFamily: "DMSans_600SemiBold", color: "#FFF" }}>
-                  {t("settings.confirmLocation")}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        initialCoords={mapCoords}
+        initialLabel={mapLabel}
+        onClose={() => setMapVisible(false)}
+        onConfirm={handleConfirmLocation}
+        saving={savingLocation}
+      />
 
       {/* Work Range Picker Modal */}
       <Modal

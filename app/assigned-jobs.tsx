@@ -306,7 +306,7 @@ export default function AssignedJobsScreen() {
             marginRight: 14,
           }}
         >
-          <FontAwesome name="arrow-left" size={16} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={16} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text

@@ -460,7 +460,7 @@ export default function ChatRoom() {
     >
       <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-border bg-bg-base">
         <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} className="mr-3">
-          <FontAwesome name="arrow-left" size={20} color={colors.textPrimary} />
+          <FontAwesome name="chevron-left" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
           className="flex-1"

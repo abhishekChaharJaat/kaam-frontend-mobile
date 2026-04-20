@@ -231,6 +231,19 @@ export default function ProfileScreen() {
             {user?.fullName || t("chat.user")}
           </Text>
 
+          {user?.primaryEmailAddress?.emailAddress ? (
+            <Text
+              style={{
+                fontSize: 13,
+                fontFamily: "DMSans_400Regular",
+                color: "rgba(255,255,255,0.7)",
+                marginTop: 4,
+              }}
+            >
+              {user.primaryEmailAddress.emailAddress}
+            </Text>
+          ) : null}
+
           {workTitle ? (
             <Text
               style={{
@@ -241,19 +254,6 @@ export default function ProfileScreen() {
               }}
             >
               {workTitle}
-            </Text>
-          ) : null}
-
-          {usagePreference === "find_work" && user?.primaryEmailAddress?.emailAddress ? (
-            <Text
-              style={{
-                fontSize: 13,
-                fontFamily: "DMSans_400Regular",
-                color: "rgba(255,255,255,0.7)",
-                marginTop: workTitle ? 2 : 4,
-              }}
-            >
-              {user.primaryEmailAddress.emailAddress}
             </Text>
           ) : null}
 
@@ -320,19 +320,20 @@ export default function ProfileScreen() {
       )}
 
       <View style={{ marginTop: location?.city ? 20 : 28 }}>
-        {/* Account Section */}
+        {/* Your Activity Section */}
         <Text
           className="text-caption font-sans-semibold text-text-tertiary"
           style={{ marginLeft: 28, marginBottom: 8, letterSpacing: 0.8 }}
         >
-          {t("profile.account", { defaultValue: "ACCOUNT" }).toUpperCase()}
+          {t("profile.yourActivity", { defaultValue: "YOUR ACTIVITY" }).toUpperCase()}
         </Text>
         <SectionCard colors={colors}>
           <MenuItem
-            icon="pencil"
-            title={t("profile.editProfile")}
-            subtitle={t("profile.updateInfo")}
-            onPress={() => router.push("/(tabs)/profile/edit")}
+            icon="briefcase"
+            title={t("jobs.myJobs")}
+            onPress={() => router.push("/my-jobs")}
+            iconBg="rgba(59,130,246,0.1)"
+            iconColor="#3B82F6"
           />
           <Divider />
           {isEmployer ? (
@@ -354,13 +355,21 @@ export default function ProfileScreen() {
               iconColor="#059669"
             />
           )}
-          <Divider />
+        </SectionCard>
+
+        {/* Account Section */}
+        <Text
+          className="text-caption font-sans-semibold text-text-tertiary"
+          style={{ marginLeft: 28, marginBottom: 8, marginTop: 6, letterSpacing: 0.8 }}
+        >
+          {t("profile.account", { defaultValue: "ACCOUNT" }).toUpperCase()}
+        </Text>
+        <SectionCard colors={colors}>
           <MenuItem
-            icon="briefcase"
-            title={t("jobs.myJobs")}
-            onPress={() => router.push("/my-jobs")}
-            iconBg="rgba(59,130,246,0.1)"
-            iconColor="#3B82F6"
+            icon="pencil"
+            title={t("profile.editProfile")}
+            subtitle={t("profile.updateInfo")}
+            onPress={() => router.push("/(tabs)/profile/edit")}
           />
           <Divider />
           <MenuItem
@@ -371,21 +380,7 @@ export default function ProfileScreen() {
             iconBg="rgba(139,92,246,0.1)"
             iconColor="#8B5CF6"
           />
-        </SectionCard>
-
-        {/* Preferences Section */}
-        <Text
-          className="text-caption font-sans-semibold text-text-tertiary"
-          style={{
-            marginLeft: 28,
-            marginBottom: 8,
-            marginTop: 6,
-            letterSpacing: 0.8,
-          }}
-        >
-          {t("profile.general", { defaultValue: "GENERAL" }).toUpperCase()}
-        </Text>
-        <SectionCard colors={colors}>
+          <Divider />
           <MenuItem
             icon="cog"
             title={t("profile.settings")}
@@ -394,7 +389,16 @@ export default function ProfileScreen() {
             iconBg="rgba(107,114,128,0.1)"
             iconColor="#6B7280"
           />
-          <Divider />
+        </SectionCard>
+
+        {/* Support Section */}
+        <Text
+          className="text-caption font-sans-semibold text-text-tertiary"
+          style={{ marginLeft: 28, marginBottom: 8, marginTop: 6, letterSpacing: 0.8 }}
+        >
+          {t("profile.support", { defaultValue: "SUPPORT" }).toUpperCase()}
+        </Text>
+        <SectionCard colors={colors}>
           <MenuItem
             icon="question-circle"
             title={t("profile.helpSupport")}
