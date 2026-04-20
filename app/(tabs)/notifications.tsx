@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   Image,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
+  Animated,
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -13,6 +13,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useAuth } from "@clerk/clerk-expo";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { useNotificationUnread } from "@/contexts/NotificationUnreadContext";
 
 interface Notification {
   id: string;
@@ -26,6 +27,37 @@ interface Notification {
 }
 
 
+function SkeletonBlock({ width, height = 12, radius = 6, style }: {
+  width: number | string; height?: number; radius?: number; style?: object;
+}) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] });
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: "#94A3B8", opacity }, style]} />
+  );
+}
+
+function SkeletonNotificationItem() {
+  return (
+    <View className="flex-row items-start px-5 py-4">
+      <SkeletonBlock width={40} height={40} radius={8} />
+      <View style={{ flex: 1, marginLeft: 12, gap: 8 }}>
+        <SkeletonBlock width="70%" height={14} />
+        <SkeletonBlock width="90%" height={11} />
+      </View>
+      <SkeletonBlock width={8} height={8} radius={4} style={{ marginTop: 8 }} />
+    </View>
+  );
+}
+
 export default function NotificationsScreen() {
   const { t } = useTranslation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -33,6 +65,7 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { getToken } = useAuth();
   const router = useRouter();
+  const { refresh: refreshUnreadBadge } = useNotificationUnread();
 
   const fetchNotifications = async () => {
     try {
@@ -57,6 +90,7 @@ export default function NotificationsScreen() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
+      refreshUnreadBadge();
     } catch {}
   };
 
@@ -106,8 +140,15 @@ export default function NotificationsScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-bg-base items-center justify-center">
-        <ActivityIndicator size="large" color="#059669" />
+      <View className="flex-1 bg-bg-base">
+        <View className="px-5 pt-14 pb-4">
+          <Text className="text-h1 text-text-primary font-sans-bold">
+            {t("notifications.title")}
+          </Text>
+        </View>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <SkeletonNotificationItem key={i} />
+        ))}
       </View>
     );
   }

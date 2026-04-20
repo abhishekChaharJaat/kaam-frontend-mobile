@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Animated,
   Platform,
@@ -316,6 +315,49 @@ function ConversationCard({
   );
 }
 
+function SkeletonBlock({ width, height = 12, radius = 6, style }: {
+  width: number | string; height?: number; radius?: number; style?: object;
+}) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.55] });
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: "#94A3B8", opacity }, style]} />
+  );
+}
+
+function SkeletonChatItem() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14 }}>
+      <SkeletonBlock width={50} height={50} radius={16} />
+      <View style={{ flex: 1, marginLeft: 14, gap: 8 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <SkeletonBlock width="55%" height={14} />
+          <SkeletonBlock width={28} height={10} />
+        </View>
+        <SkeletonBlock width="75%" height={12} />
+      </View>
+    </View>
+  );
+}
+
+function ChatListSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <SkeletonChatItem key={i} />
+      ))}
+    </>
+  );
+}
+
 export default function ChatList() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -539,11 +581,7 @@ export default function ChatList() {
 
       {/* Content */}
       {loading ? (
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <ActivityIndicator size="large" color="#059669" />
-        </View>
+        <ChatListSkeleton />
       ) : (
         <FlatList
           data={visibleConversations}

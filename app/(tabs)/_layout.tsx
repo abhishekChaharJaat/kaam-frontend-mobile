@@ -17,6 +17,7 @@ import { useThemeColors } from "@/lib/useThemeColors";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useChatUnread } from "@/contexts/ChatUnreadContext";
+import { useNotificationUnread } from "@/contexts/NotificationUnreadContext";
 
 const TAB_ICONS: Record<string, React.ComponentProps<typeof FontAwesome>["name"]> = {
   index: "home",
@@ -79,7 +80,8 @@ function FloatingTabBar({
   descriptors,
   navigation,
   chatsUnreadTotal = 0,
-}: BottomTabBarProps & { chatsUnreadTotal?: number }) {
+  notificationsUnreadTotal = 0,
+}: BottomTabBarProps & { chatsUnreadTotal?: number; notificationsUnreadTotal?: number }) {
   const colors = useThemeColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -230,6 +232,35 @@ function FloatingTabBar({
                       </Text>
                     </View>
                   )}
+                  {route.name === "notifications" && notificationsUnreadTotal > 0 && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -10,
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: "#EF4444",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingHorizontal: 5,
+                        borderWidth: 2,
+                        borderColor: colors.bgSurface,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontFamily: "DMSans_700Bold",
+                          color: "#FFFFFF",
+                          lineHeight: 12,
+                        }}
+                      >
+                        {notificationsUnreadTotal > 99 ? "99+" : notificationsUnreadTotal}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 {isFocused && (
                   <View
@@ -264,8 +295,9 @@ function FloatingTabBar({
 }
 
 function TabBarWithUnread(props: BottomTabBarProps) {
-  const { totalUnread } = useChatUnread();
-  return <FloatingTabBar {...props} chatsUnreadTotal={totalUnread} />;
+  const { totalUnread: chatUnread } = useChatUnread();
+  const { totalUnread: notifUnread } = useNotificationUnread();
+  return <FloatingTabBar {...props} chatsUnreadTotal={chatUnread} notificationsUnreadTotal={notifUnread} />;
 }
 
 interface BackendUser {
