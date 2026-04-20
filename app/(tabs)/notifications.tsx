@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   View,
   Text,
+  Image,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
@@ -24,14 +25,6 @@ interface Notification {
   created_at: string;
 }
 
-const ICON_MAP: Record<string, { name: React.ComponentProps<typeof FontAwesome>["name"]; color: string; bg: string }> = {
-  new_message: { name: "comment", color: "#3B82F6", bg: "bg-info-ghost" },
-  new_job: { name: "briefcase", color: "#059669", bg: "bg-primary-ghost" },
-  job_assigned: { name: "check-circle", color: "#10B981", bg: "bg-success-ghost" },
-  job_reopened: { name: "refresh", color: "#F59E0B", bg: "bg-warning-ghost" },
-  job_closed: { name: "times-circle", color: "#EF4444", bg: "bg-error-ghost" },
-  system_alert: { name: "bell", color: "#9CA3AF", bg: "bg-bg-elevated" },
-};
 
 export default function NotificationsScreen() {
   const { t } = useTranslation();
@@ -77,7 +70,6 @@ export default function NotificationsScreen() {
   };
 
   const renderItem = ({ item }: { item: Notification }) => {
-    const iconInfo = ICON_MAP[item.type] || ICON_MAP.system_alert;
     return (
       <TouchableOpacity
         className={`flex-row items-start px-5 py-4 ${
@@ -86,8 +78,12 @@ export default function NotificationsScreen() {
         onPress={() => handleTap(item)}
         activeOpacity={0.6}
       >
-        <View className={`w-10 h-10 rounded-lg items-center justify-center ${iconInfo.bg}`}>
-          <FontAwesome name={iconInfo.name} size={16} color={iconInfo.color} />
+        <View className="w-10 h-10 rounded-lg items-center justify-center overflow-hidden">
+          <Image
+            source={require("@/assets/images/icon.png")}
+            className="w-10 h-10 rounded-lg"
+            resizeMode="cover"
+          />
         </View>
         <View className="flex-1 ml-3">
           <Text
