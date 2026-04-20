@@ -22,6 +22,7 @@ import { useThemeStore } from "@/store/theme";
 import { useUserStore } from "@/store/user";
 import { ToastProvider } from "@/lib/toast";
 import { ChatUnreadProvider } from "@/contexts/ChatUnreadContext";
+import { PushNotificationsProvider } from "@/contexts/PushNotificationsProvider";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -118,22 +119,24 @@ export default function RootLayout() {
           />
           <ToastProvider isDark={isDark}>
             <ChatUnreadProvider>
-              <ThemeProvider
-                value={{
-                  ...DefaultTheme,
-                  dark: isDark,
-                  colors: navColors,
-                }}
-              >
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    gestureEnabled: true,
-                    gestureDirection: "horizontal",
-                    animation: "slide_from_right",
+              <PushNotificationsProvider>
+                <ThemeProvider
+                  value={{
+                    ...DefaultTheme,
+                    dark: isDark,
+                    colors: navColors,
                   }}
-                />
-              </ThemeProvider>
+                >
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      gestureEnabled: true,
+                      gestureDirection: "horizontal",
+                      animation: "slide_from_right",
+                    }}
+                  />
+                </ThemeProvider>
+              </PushNotificationsProvider>
             </ChatUnreadProvider>
           </ToastProvider>
         </View>
